@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>HyperTimer — v7 </title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <div class="topbar">
+    <div class="brand">HyperTimer <span class="note" style="margin-left:.4rem;">v6.2.1</span></div><div class="spacer"></div>
+    <div class="controls">
+      <div id="accountControls">
+        <button class="btn" id="loginBtn">Log In</button>
+        <button class="btn primary" id="signupBtn">Sign Up</button>
+      </div>
+      <div id="userSession" class="invisible" style="display:flex; gap:.5rem; align-items:center;">
+        <span id="userEmailDisplay" class="note"></span>
+        <button class="btn" id="syncBtn">Sync</button>
+        <button class="btn" id="logoutBtn">Log Out</button>
+      </div>
+      <button class="btn" id="exportBtn">Export</button>
+      <label class="btn">Import <input id="importInput" type="file" accept="application/json" style="display:none;"></label>
+      <button class="btn" id="tplBtn">Templates ▾</button>
+      <button class="btn" id="pauseAllBtn">Pause All</button>
+      <button class="btn primary" id="addBtn">New</button>
+    </div>
+  </div>
+</header>
+
+<main class="grid" id="grid"></main>
+<button class="fab" id="fab" aria-label="Add timer">＋</button>
+<div class="template-menu" id="templateMenu"></div>
+
+<dialog id="editor">
+  <form method="dialog" novalidate>
+    <div class="dialog-header">
+      <div class="title" id="dialogTitle">New Timer</div>
+      <div style="display:flex; gap:8px; align-items:center;">
+        <button class="btn" id="saveTplBtn" type="button">Save as Template</button>
+        <button class="btn" value="cancel">✕</button>
+      </div>
+    </div>
+    <div class="dialog-body">
+      <div class="field">
+        <label>Name</label>
+        <input id="f_name" type="text" placeholder="e.g., Pizza, Exam, Birthday">
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label>Mode</label>
+          <select id="f_mode">
+            <option value="duration">Duration</option>
+            <option value="datetime">End date & time</option>
+            <option value="smart">Smart</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Animation</label>
+          <select id="f_style">
+            <option value="none">No animation</option>
+            <option value="bar" selected>Bar</option>
+            <option value="ring">Ring</option>
+            <option value="pie">Pie</option>
+            <option value="multibar">Multi Bar</option>
+            <option value="letters">Letters</option>
+          </select>
+        </div>
+      </div>
+      <div id="durationFields" class="field-row">
+        <div class="field"><label>Days</label><input id="f_days" type="number" min="0" value="0"></div>
+        <div class="field"><label>Hours</label><input id="f_hours" type="number" min="0" max="23" value="0"></div>
+        <div class="field"><label>Minutes</label><input id="f_minutes" type="number" min="0" max="59" value="1"></div>
+        <div class="field"><label>Seconds</label><input id="f_seconds" type="number" min="0" max="59" value="0"></div>
+      </div>
+      <div id="datetimeFields" class="field">
+        <label>End date & time</label>
+        <input id="f_when" type="datetime-local">
+      </div>
+      <div id="smartFields" class="field-row invisible">
+        <div class="field">
+          <label>Method</label>
+          <select id="f_smartMethod">
+            <option value="manifold">Manifold</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Market URL</label>
+          <input id="f_smartUrl" type="url" placeholder="https://api.manifold.markets/...">
+        </div>
+      </div>
+      <div id="startOverrideRow" class="field invisible">
+        <label>Start date & time (optional)</label>
+        <input id="f_startWhen" type="datetime-local">
+        <div class="note">For 'End date & time' or 'Smart time' modes. Controls where the animation starts.</div>
+      </div>
+      <div id="startPctRow" class="field invisible">
+        <label>Or starting percentage (0–100)</label>
+        <input id="f_startPct" type="number" min="0" max="100" step="0.1" placeholder="e.g., 35">
+        <div class="note">If set (and no start date), we back-compute a virtual start so progress equals this % right now.</div>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label>Primary color</label>
+          <input id="f_color" type="color" value="#6c7bff">
+        </div>
+        <div class="field">
+          <label>Units display</label>
+          <select id="f_units">
+            <option value="auto">Auto</option>
+            <option value="d">Days only</option>
+            <option value="dhm">Days + hours + minutes</option>
+            <option value="hms">Hours:Minutes:Seconds</option>
+            <option value="ms">Minutes:Seconds</option>
+            <option value="s">Seconds only</option>
+            <option value="custom">Custom format…</option>
+          </select>
+        </div>
+      </div>
+      <div id="customFormatRow" class="field invisible">
+        <label>Custom time format</label>
+        <input id="f_format" type="text" placeholder="{HH}:{mm}:{ss}">
+        <div class="note">Tokens: {DD},{HH},{mm},{ss},{ms3},{totalD},{totalH},{totalm},{totals},{name}</div>
+      </div>
+      <details>
+        <summary>Advanced visuals</summary>
+        <div class="field-row">
+          <div class="field">
+            <label>Multi‑bar: Bars count (2–5)</label>
+            <input id="f_mb_bars" type="number" min="2" max="5" placeholder="auto">
+          </div>
+          <div class="field">
+            <label>Multi‑bar: Target ticks per bar (8–40)</label>
+            <input id="f_mb_ticks" type="number" min="8" max="40" placeholder="~20">
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label>Ring thickness (px)</label>
+            <input id="f_ring_thickness" type="number" min="4" max="40" value="10">
+          </div>
+          <div class="field">
+            <label>Progress easing</label>
+            <select id="f_ease"><option>linear</option><option>easeOut</option><option>easeInOut</option></select>
+          </div>
+        </div>
+        <div class="field">
+          <label>Tick rate (ms)</label>
+          <input id="f_tick" type="number" min="16" value="100">
+        </div>
+        <div class="field invisible" id="lettersSettings">
+          <label>Letters (count)</label>
+          <input id="f_letters_n" type="number" min="1" max="7" placeholder="Auto (leave blank)">
+          <div class="note" id="lettersPreview">Frames: — • Frame length: —</div>
+        </div>
+        <div class="field">
+          <label>Show milliseconds</label>
+          <select id="f_ms"><option value="off">Off</option><option value="on">On</option></select>
+        </div>
+      </details>
+      <details open>
+        <summary>Triggers (Sound & TTS)</summary>
+        <div id="trList" class="field" style="gap:10px"></div>
+        <div class="tr-actions">
+          <button class="btn" type="button" id="addPctBtn">+ Percent</button>
+          <button class="btn" type="button" id="addTimeBtn">+ Time</button>
+          <button class="btn" type="button" id="addIntBtn">+ Interval</button>
+        </div>
+        <div class="note">Intervals are aligned to elapsed multiples. Web cannot duck other apps’ volume; Android app will use Audio Focus.</div>
+      </details>
+      <details>
+        <summary>Completion</summary>
+        <div class="field-row">
+          <div class="field">
+            <label>Completion sound (upload)</label>
+            <input id="f_doneSound" type="file" accept="audio/*">
+          </div>
+          <div class="field">
+            <label>Completion TTS (optional)</label>
+            <input id="f_doneTts" type="text" placeholder="e.g., Time's up for {name}">
+          </div>
+        </div>
+      </details>
+      <div class="footer-row">
+        <div class="note">Tip: long timers look great with Multi Bar. Save layouts as templates.</div>
+        <div>
+          <button class="btn" value="cancel">Cancel</button>
+          <button class="btn primary" id="saveBtn" type="button">Save</button>
+        </div>
+      </div>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="authDialog">
+  <form method="dialog" novalidate>
+    <div class="dialog-header">
+      <div class="title" id="authTitle">Log In</div>
+      <button class="btn" value="cancel" style="line-height:1;">✕</button>
+    </div>
+    <div class="dialog-body">
+      <div class="field">
+        <label>Email</label>
+        <input id="auth_email" type="email" required autocomplete="email">
+      </div>
+      <div class="field">
+        <label>Password</label>
+        <input id="auth_password" type="password" required autocomplete="current-password">
+      </div>
+      <div class="footer-row" style="margin-top:1rem;">
+        <a href="#" id="authModeSwitch" class="note" style="cursor:pointer;">Need an account? Sign Up</a>
+        <div>
+          <button class="btn" value="cancel">Cancel</button>
+          <button class="btn primary" id="authSubmitBtn" type="button">Log In</button>
+        </div>
+      </div>
+    </div>
+  </form>
+</dialog>
+
+<script src="script.js" defer></script>
+</body>
+</html>
