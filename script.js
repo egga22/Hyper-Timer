@@ -7,6 +7,19 @@
   const pad3 = n => String(n).padStart(3, "0");
   const clamp = (v,a,b) => Math.min(b, Math.max(a, v));
   const uid = (p="id_") => p + Math.random().toString(36).slice(2);
+  function normalizeColorString(str, fallback="#6c7bff"){
+    if (typeof str === "string"){
+      const trimmed = str.trim();
+      const match = trimmed.match(/^#?([0-9a-fA-F]{6})$/);
+      if (match) return "#" + match[1].toLowerCase();
+    }
+    if (typeof fallback === "string" && fallback !== str){
+      const trimmed = fallback.trim();
+      const match = trimmed.match(/^#?([0-9a-fA-F]{6})$/);
+      if (match) return "#" + match[1].toLowerCase();
+    }
+    return "#6c7bff";
+  }
 
   // --- START: Authentication and Sync Configuration ---
   const RESTDB_URL = 'https://timerapp-1f65.restdb.io/rest/accounts'; // <-- IMPORTANT: SET THIS
@@ -38,7 +51,7 @@
   const f = {
     name: $("#f_name"), mode: $("#f_mode"), when: $("#f_when"),
     days: $("#f_days"), hours: $("#f_hours"), minutes: $("#f_minutes"), seconds: $("#f_seconds"),
-    style: $("#f_style"), color: $("#f_color"), units: $("#f_units"),
+    style: $("#f_style"), color: $("#f_color"), color2: $("#f_color2"), units: $("#f_units"),
     format: $("#f_format"), ring_thickness: $("#f_ring_thickness"),
     ease: $("#f_ease"), tick: $("#f_tick"), ms: $("#f_ms"),
     mb_bars: $("#f_mb_bars"), mb_ticks: $("#f_mb_ticks"), letters_n: $("#f_letters_n"), lettersPreview: $("#lettersPreview"),
@@ -83,7 +96,7 @@
       const raw = localStorage.getItem(KEY_TIMERS);
       if (raw){ const data = JSON.parse(raw); if (Array.isArray(data)) timers = data.map(migrateTimer); }
       const rt = localStorage.getItem(TPL);
-      if (rt){ const data = JSON.parse(rt); if (Array.isArray(data)) templates = data; }
+      if (rt){ const data = JSON.parse(rt); if (Array.isArray(data)) templates = data.map(migrateTemplate); }
     } catch(e){ console.warn("load failed", e); }
     if (currentUser) {
         syncTimers();
@@ -97,6 +110,8 @@
     const out = {...t};
     out.triggers = out.triggers || [];
     out.prestigeLevel = out.prestigeLevel || 0;
+    out.color = normalizeColorString(out.color);
+    out.color2 = normalizeColorString(out.color2, out.color);
     if (out.mode === "datetime" || out.mode === "smart"){
       if (typeof out.targetMs !== "number"){
         const guess = (typeof out.target === "string") ? Date.parse(out.target) : Number(out.target);
@@ -105,6 +120,13 @@
     }
     out.total0 = out.total0 || baseTotal(out);
     if (!out.mb_plan){ out.mb_plan = planMultiBar(Math.max(1000, out.total0), out.mb_bars||null, out.mb_ticks||null); }
+    return out;
+  }
+
+  function migrateTemplate(tpl){
+    const out = {...tpl};
+    out.color = normalizeColorString(out.color);
+    out.color2 = normalizeColorString(out.color2, out.color);
     return out;
   }
 
@@ -239,6 +261,157 @@
     return ease(raw);
   }
 
+  function parseHexColor(hex){
+    if (typeof hex !== "string") return null;
+    const match = hex.trim().match(/^#?([0-9a-fA-F]{6})$/);
+    if (!match) return null;
+    const value = parseInt(match[1], 16);
+    return { r: (value >> 16) & 255, g: (value >> 8) & 255, b: value & 255 };
+  }
+  function sanitizeRgb(rgb){
+    const base = rgb || {};
+    return {
+      r: Math.min(255, Math.max(0, Math.round(base.r ?? 0))),
+      g: Math.min(255, Math.max(0, Math.round(base.g ?? 0))),
+      b: Math.min(255, Math.max(0, Math.round(base.b ?? 0)))
+    };
+  }
+  function rgbToHex(rgb){
+    const c = sanitizeRgb(rgb);
+    return "#" + [c.r, c.g, c.b].map(v => v.toString(16).padStart(2, "0")).join("");
+  }
+  function rgbToCss(rgb){
+    const c = sanitizeRgb(rgb);
+    return `rgb(${c.r}, ${c.g}, ${c.b})`;
+  }
+  function rgbaString(rgb, alpha){
+    const c = sanitizeRgb(rgb);
+    const a = Math.min(1, Math.max(0, alpha));
+    return `rgba(${c.r}, ${c.g}, ${c.b}, ${a})`;
+  }
+  function blendRgb(a, b, t){
+    const start = sanitizeRgb(a);
+    const end = sanitizeRgb(b);
+    const p = clamp(typeof t === "number" ? t : 0, 0, 1);
+    return {
+      r: start.r + (end.r - start.r) * p,
+      g: start.g + (end.g - start.g) * p,
+      b: start.b + (end.b - start.b) * p
+    };
+  }
+  function relativeLuminance(rgb){
+    const c = sanitizeRgb(rgb);
+    const toLinear = (value) => {
+      const s = value / 255;
+      return s <= 0.04045 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+    };
+    const r = toLinear(c.r);
+    const g = toLinear(c.g);
+    const b = toLinear(c.b);
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  }
+  function accentFromRgb(rgb, extra={}){
+    const safe = sanitizeRgb(rgb);
+    const lum = relativeLuminance(safe);
+    return {
+      rgb: safe,
+      hex: rgbToHex(safe),
+      css: rgbToCss(safe),
+      luminance: lum,
+      isLight: lum > 0.55,
+      ...extra
+    };
+  }
+  function currentAccentColor(t, progressOverride=null){
+    const baseFallback = {r:108, g:123, b:255};
+    const startRgb = sanitizeRgb(parseHexColor(t?.color) || baseFallback);
+    const progress = clamp(typeof progressOverride === "number" ? progressOverride : visualProgress(t), 0, 1);
+    if (t?.style === "color"){
+      const endRgb = sanitizeRgb(parseHexColor(t.color2) || startRgb);
+      const mix = blendRgb(startRgb, endRgb, progress);
+      return accentFromRgb(mix, {
+        progress,
+        startRgb,
+        endRgb,
+        startCss: rgbToCss(startRgb),
+        endCss: rgbToCss(endRgb)
+      });
+    }
+    return accentFromRgb(startRgb, {
+      progress,
+      startRgb,
+      endRgb: startRgb,
+      startCss: rgbToCss(startRgb),
+      endCss: rgbToCss(startRgb)
+    });
+  }
+  function updateCardVisuals(card, t, accent){
+    if (!card || !accent) return;
+    const dot = card.querySelector('[data-role="accent-dot"]');
+    if (dot){
+      dot.style.background = accent.hex;
+      dot.style.boxShadow = `0 0 20px ${rgbaString(accent.rgb, 0.28)}`;
+    }
+    const subtitle = card.querySelector('.subtitle');
+    const pill = card.querySelector('[data-role="accent-pill"]');
+    const actions = card.querySelectorAll('.actions .action-btn');
+    const flip = card.querySelector('.big .flip');
+    const etaNote = card.querySelector('.footer-row .note');
+
+    if (t.style === 'color'){
+      card.classList.add('color-style');
+      card.classList.toggle('color-style-light', accent.isLight);
+      card.classList.toggle('color-style-dark', !accent.isLight);
+      const prog = clamp(accent.progress ?? 0, 0, 1);
+      const towardsStart = blendRgb(accent.rgb, accent.startRgb || accent.rgb, 1 - prog);
+      const towardsEnd = blendRgb(accent.rgb, accent.endRgb || accent.rgb, prog);
+      const lightEdge = blendRgb(towardsStart, {r:255, g:255, b:255}, 0.18);
+      const darkEdge = blendRgb(towardsEnd, {r:0, g:0, b:0}, 0.25);
+      card.style.background = `linear-gradient(140deg, ${rgbToCss(lightEdge)} 0%, ${accent.css} 48%, ${rgbToCss(darkEdge)} 100%)`;
+      card.style.borderColor = rgbaString(accent.rgb, accent.isLight ? 0.28 : 0.36);
+      const textColor = accent.isLight ? '#05070b' : '#f7f8ff';
+      const muted = accent.isLight ? 'rgba(0,0,0,0.62)' : 'rgba(255,255,255,0.78)';
+      card.style.color = textColor;
+      if (subtitle) subtitle.style.color = muted;
+      if (etaNote) etaNote.style.color = muted;
+      if (pill){
+        pill.style.background = accent.isLight ? 'rgba(255,255,255,0.24)' : 'rgba(0,0,0,0.18)';
+        pill.style.color = textColor;
+        pill.style.borderColor = accent.isLight ? 'rgba(0,0,0,0.28)' : 'rgba(255,255,255,0.28)';
+      }
+      actions.forEach(btn => {
+        btn.style.background = accent.isLight ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.22)';
+        btn.style.borderColor = accent.isLight ? 'rgba(0,0,0,0.14)' : 'rgba(255,255,255,0.18)';
+        btn.style.color = textColor;
+      });
+      if (flip){
+        flip.style.background = accent.isLight ? 'rgba(255,255,255,0.22)' : 'rgba(0,0,0,0.22)';
+        flip.style.borderColor = accent.isLight ? 'rgba(0,0,0,0.12)' : 'rgba(255,255,255,0.12)';
+      }
+    } else {
+      card.classList.remove('color-style', 'color-style-light', 'color-style-dark');
+      card.style.background = '';
+      card.style.borderColor = '';
+      card.style.color = '';
+      if (subtitle) subtitle.style.color = '';
+      if (etaNote) etaNote.style.color = '';
+      if (pill){
+        pill.style.background = '';
+        pill.style.color = accent.hex;
+        pill.style.borderColor = rgbaString(accent.rgb, 0.45);
+      }
+      actions.forEach(btn => {
+        btn.style.background = '';
+        btn.style.borderColor = '';
+        btn.style.color = '';
+      });
+      if (flip){
+        flip.style.background = '';
+        flip.style.borderColor = '';
+      }
+    }
+  }
+
   function planMultiBar(totalMs, barsOverride=null, targetTicksPerBar=null){
     const S = Math.max(1, Math.round(totalMs/1000));
     const MINB=2, MAXB=5, MINT=8, MAXT=40, TARGET = clamp(targetTicksPerBar||20, MINT, MAXT);
@@ -282,7 +455,7 @@
     return `${tpl.style} • ${tpl.units} • ${Math.random().toString(36).slice(2,6)}`;
   }
   function saveTemplateFromTimer(t){
-    const tpl = { id:uid("tpl_"), style:t.style, color:t.color, units:t.units, format:t.format,
+    const tpl = { id:uid("tpl_"), style:t.style, color:t.color, color2:t.color2, units:t.units, format:t.format,
       ring_thickness:t.ring_thickness, ease:t.ease, tick:t.tick, ms:t.ms, dotsCount:t.dotsCount, mb_bars:t.mb_bars, mb_ticks:t.mb_ticks, letters_n:t.letters_n,
       triggers:t.triggers, doneSoundDataUrl:t.doneSoundDataUrl, doneTts:t.doneTts, name: pickTemplateName(t) };
     templates.push(tpl); saveTemplates(); alert("Saved template: "+tpl.name);
@@ -291,7 +464,7 @@
   function openTemplateMenu(){
     templateMenu.innerHTML="";
     const add=document.createElement("div"); add.className="template-item"; add.innerHTML="<strong>＋ New Template</strong>";
-    add.addEventListener("click", ()=>{ templateMenu.classList.remove("open"); openEditor(null, {style:'bar', color:'#6c7bff', units:'auto'}); });
+    add.addEventListener("click", ()=>{ templateMenu.classList.remove("open"); openEditor(null, {style:'bar', color:'#6c7bff', color2:'#6c7bff', units:'auto'}); });
     templateMenu.appendChild(add);
     templates.forEach(tpl=>{
       const row=document.createElement("div"); row.className="template-item";
@@ -409,10 +582,17 @@
     }catch(e){ /* silent */ }
   }
   
-  function updateLettersUI(){
+  function updateStyleUI(){
     const row = document.getElementById('lettersSettings');
-    const isLetters = f.style && f.style.value === 'letters';
+    const color2Row = document.getElementById('color2Field');
+    const styleVal = f.style ? f.style.value : 'bar';
+    const isLetters = styleVal === 'letters';
+    const isColor = styleVal === 'color';
     if (row) row.classList.toggle('invisible', !isLetters);
+    if (color2Row) color2Row.classList.toggle('invisible', !isColor);
+    if (isColor && f.color2 && (!f.color2.value || f.color2.value.trim() === '')){
+      f.color2.value = f.color?.value || '#6c7bff';
+    }
     if (isLetters) updateLettersPreview();
   }
 
@@ -421,6 +601,7 @@
     editId = id;
     const draft = id ? timers.find(x=>x.id===id) : {
       id: uid("t_"), name:"", mode:"duration", style: template?.style || "bar", color: template?.color || "#6c7bff",
+      color2: template?.color2 || template?.color || "#6c7bff",
       units: template?.units || "auto", format: template?.format || "{HH}:{mm}:{ss}",
       ring_thickness: template?.ring_thickness ?? 10, ease: template?.ease || "linear", tick: template?.tick ?? 100, ms: template?.ms || "off",
       dotsCount: template?.dotsCount ?? 60, mb_bars: template?.mb_bars ?? null, mb_ticks: template?.mb_ticks ?? null, letters_n: template?.letters_n ?? null,
@@ -429,6 +610,7 @@
     };
 
     f.name.value = draft.name||""; f.mode.value=draft.mode||"duration"; f.style.value=draft.style||"bar"; f.color.value=draft.color||"#6c7bff";
+    if (f.color2) f.color2.value = draft.color2 || draft.color || "#6c7bff";
     f.units.value=draft.units||"auto"; f.format.value=draft.format||"{HH}:{mm}:{ss}";
     f.ring_thickness.value=draft.ring_thickness??10; f.ease.value=draft.ease||"linear"; f.tick.value=draft.tick??100; f.ms.value=draft.ms||"off";
     f.mb_bars.value = draft.mb_bars ?? ""; f.mb_ticks.value = draft.mb_ticks ?? ""; if (f.letters_n) f.letters_n.value = draft.letters_n ?? "";
@@ -450,9 +632,9 @@
     ;['change','input'].forEach(ev=>{
       [f.days,f.hours,f.minutes,f.seconds,f.when,f.letters_n,f.startWhen,f.startPct]
         .forEach(el=> el && el.addEventListener(ev, updateLettersPreview));
-      if (f.style) f.style.addEventListener('change', updateLettersUI);
+      if (f.style) f.style.addEventListener('change', updateStyleUI);
     });
-    updateLettersUI();
+    updateStyleUI();
 
     if (f.mode.value === "duration"){
       const ms = draft.duration ?? 60000;
@@ -693,7 +875,8 @@
   $("#saveTplBtn").addEventListener("click", async ()=>{
     const triggers = await collectTrEntries(new Map());
     const tpl = {
-      id: uid("tpl_"), name: f.name.value.trim() || "Template", style: f.style.value, color: f.color.value, 
+      id: uid("tpl_"), name: f.name.value.trim() || "Template", style: f.style.value, color: f.color.value,
+      color2: f.color2.value || f.color.value,
       units: f.units.value, format: f.format.value || "{HH}:{mm}:{ss}", ring_thickness: +f.ring_thickness.value || 10,
       ease: f.ease.value, tick: +f.tick.value || 100, ms: f.ms.value,
       mb_bars: f.mb_bars.value? Math.max(2, Math.min(5, +f.mb_bars.value)) : null,
@@ -709,6 +892,7 @@
     e.preventDefault();
     const base = {
       id: editId || uid("t_"), name: f.name.value.trim() || "Untitled", style: f.style.value, color: f.color.value,
+      color2: f.color2.value || f.color.value,
       units: f.units.value, format: f.format.value || "{HH}:{mm}:{ss}", ring_thickness: +f.ring_thickness.value || 10,
       ease: f.ease.value, tick: +f.tick.value || 100, ms: f.ms.value,
       mb_bars: f.mb_bars.value? Math.max(2, Math.min(5, +f.mb_bars.value)) : null,
@@ -826,6 +1010,8 @@
       const card = document.createElement("div");
       card.className="card"; card.dataset.id=t.id;
 
+      const progress = visualProgress(t);
+
       const actions = document.createElement("div");
       actions.className="actions";
       const pauseBtn = (t.mode==="datetime" || t.mode==="smart") ? "" : `<button class="action-btn" data-act="pause" title="${t.paused?'Resume':'Pause'}">⏯︎</button>`;
@@ -834,8 +1020,19 @@
 
       const title = document.createElement("div");
       title.className="title";
-      const badge = (t.prestigeLevel||0) ? `<span class="badge">Prestige ${t.prestigeLevel}</span>` : "";
-      title.innerHTML = `<span class="dot" style="width:10px;height:10px;border-radius:999px;background:${t.color};box-shadow:0 0 20px ${t.color}33"></span> ${escapeHtml(t.name||"Untitled")} ${badge}`;
+      const dotEl = document.createElement("span");
+      dotEl.className = "dot";
+      dotEl.dataset.role = "accent-dot";
+      title.appendChild(dotEl);
+      const nameEl = document.createElement("span");
+      nameEl.textContent = t.name || "Untitled";
+      title.appendChild(nameEl);
+      if (t.prestigeLevel){
+        const badgeEl = document.createElement("span");
+        badgeEl.className = "badge";
+        badgeEl.textContent = `Prestige ${t.prestigeLevel}`;
+        title.appendChild(badgeEl);
+      }
       card.appendChild(title);
 
       const subt = document.createElement("div");
@@ -854,14 +1051,14 @@
         const big = makeBig(t); card.appendChild(big);
         const bar = document.createElement("div"); bar.className="progressbar";
         const fill = document.createElement("div"); fill.style.background=t.color; bar.appendChild(fill); card.appendChild(bar);
-        fill.style.width = (visualProgress(t)*100).toFixed(2)+"%";
+        fill.style.width = (progress*100).toFixed(2)+"%";
       } else {
         const big = makeBig(t); card.appendChild(big);
       }
 
       const foot = document.createElement("div");
       foot.className="footer-row";
-      const pill = document.createElement("span"); pill.className="pill"; pill.style.borderColor=t.color+"88"; pill.style.color=t.color;
+      const pill = document.createElement("span"); pill.className="pill"; pill.dataset.role="accent-pill";
       pill.textContent="Copy remaining"; pill.addEventListener("click", ()=>{ navigator.clipboard?.writeText(fmt(remainingMs(t), t.units, t.ms==='on', t.units==='custom'?t.format:null, t.name)); pill.textContent="Copied ✓"; setTimeout(()=>pill.textContent="Copy remaining", 900);});
       foot.appendChild(pill);
 
@@ -870,6 +1067,9 @@
       else { const d = new Date(t.start + (t.duration||0)); eta.textContent = "ETA " + d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}); }
       foot.appendChild(eta);
       card.appendChild(foot);
+
+      const accent = currentAccentColor(t, progress);
+      updateCardVisuals(card, t, accent);
 
       actions.addEventListener("click", async ev=>{
         const act = ev.target?.dataset?.act;
@@ -1089,13 +1289,17 @@
       const txt = card.querySelector(".big .flip");
       const template = t.units==="custom" ? t.format : null;
       const newTxt = fmt(remainingForDisplay(t), t.units, t.ms==="on", template, t.name);
+      const progress = visualProgress(t);
       if (txt && txt.textContent !== newTxt){ txt.textContent=newTxt; txt.style.transform="perspective(400px) rotateX(16deg)"; setTimeout(()=>txt.style.transform="perspective(400px) rotateX(0deg)", 120); }
 
       if (["ring","pie","multibar","letters"].includes(t.style)){
         const cvs = card.querySelector("canvas"); if (cvs) drawVisual(cvs,t);
       } else if (t.style === "bar"){
-        const fill = card.querySelector(".progressbar > div"); if (fill) fill.style.width=(visualProgress(t)*100).toFixed(2)+"%";
+        const fill = card.querySelector(".progressbar > div"); if (fill) fill.style.width=(progress*100).toFixed(2)+"%";
       }
+
+      const accent = currentAccentColor(t, progress);
+      updateCardVisuals(card, t, accent);
 
       const prevRem = t._prevRem ?? remainingMs(t);
       const rem = remainingMs(t); const total = t.total0 || baseTotal(t);
