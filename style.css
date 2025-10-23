@@ -7,6 +7,9 @@ header{position:sticky; top:0; z-index:10; background:linear-gradient(180deg, rg
 .brand{font-weight:800}
 .spacer{flex:1}
 .btn{border:1px solid rgba(255,255,255,.14); background:#191b26; color:var(--text); padding:.55rem .8rem; border-radius:12px; cursor:pointer; font-weight:600;}
+.btn.icon{display:flex; align-items:center; gap:.45rem;}
+.btn.icon .icon{font-size:1.1rem; line-height:1;}
+.btn.icon .label{line-height:1;}
 .btn.primary{background:var(--accent); color:#0b0c10; border-color:transparent}
 .controls{display:flex; gap:.5rem; align-items:center; flex-wrap:wrap}
 select, input{background:#171925; color:var(--text); border:1px solid rgba(255,255,255,.12); border-radius:12px; padding:.45rem .6rem;}
@@ -29,6 +32,12 @@ dialog{width:min(980px,96vw); border:none; border-radius:16px; background:#12142
 dialog::backdrop{background:rgba(0,0,0,.6)}
 .dialog-header{display:flex; align-items:center; justify-content:space-between; padding:12px 14px; border-bottom:1px solid rgba(255,255,255,.08); gap:8px; flex-wrap:wrap}
 .dialog-body{padding:12px 14px; display:grid; gap:10px; overflow-x:hidden}
+.settings-body{gap:16px;}
+.settings-section{display:grid; gap:12px;}
+.settings-actions{display:flex; gap:10px; flex-wrap:wrap; align-items:center;}
+.settings-summary{display:grid; gap:4px;}
+.settings-value{font-weight:700;}
+.settings-role{margin-top:auto; font-size:.9rem; color:var(--muted); border-top:1px solid rgba(255,255,255,.08); padding-top:12px;}
 .field{display:grid; gap:6px; min-width:0}
 .field-row{display:grid; grid-template-columns:1fr 1fr; gap:10px}
 .note{font-size:.85rem; color:var(--muted)}
