@@ -39,3 +39,17 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
 .template-item:hover{background:#1a1d2a}
 .badge{font-size:.72rem; padding:.1rem .35rem; border:1px solid rgba(255,255,255,.16); border-radius:999px; color:var(--muted)}
 .card.color-style{transition:background .6s ease, color .3s ease, border-color .3s ease}
+.split-wrap{display:grid; gap:12px; margin-top:12px}
+.split-wrap.split-count-3{grid-template-columns:repeat(auto-fit, minmax(180px, 1fr))}
+.split-item{background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.08); border-radius:16px; padding:12px; display:flex; flex-direction:column; gap:10px; transition:background .3s ease, border-color .3s ease}
+.card.color-style .split-item{border-color:rgba(0,0,0,.18)}
+.split-item-label{font-size:.78rem; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); font-weight:700}
+.split-item .canvaswrap{width:100%; max-width:220px; margin:0 auto}
+.split-item .canvaswrap canvas{width:100% !important}
+.split-note{font-size:.78rem; color:var(--muted)}
+.split-color-preview{position:relative; border-radius:12px; height:140px; display:flex; align-items:flex-end; justify-content:space-between; padding:10px; border:1px solid rgba(255,255,255,.12); background:linear-gradient(135deg,#6c7bff 0%,#6c7bff 100%); overflow:hidden}
+.split-color-preview.light{color:#05070b}
+.split-color-preview.dark{color:#f7f8ff}
+.split-color-chips{display:flex; gap:6px}
+.split-color-chip{font-size:.75rem; font-weight:600; padding:4px 8px; border-radius:999px; background:rgba(0,0,0,.35); color:#f7f8ff}
+.split-color-preview.light .split-color-chip{background:rgba(255,255,255,.68); color:#05070b}
