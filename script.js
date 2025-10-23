@@ -966,9 +966,33 @@
         currentUser.role = remoteRole;
         localStorage.setItem(KEY_USER, JSON.stringify(currentUser));
         updateUIForLoginState();
-        // RestDB returns DateTime as an ISO string. Date.parse() handles it correctly.
-        const remoteTimestamp = remoteUser.last_modified ? Date.parse(remoteUser.last_modified) : 0;
-        const localTimestamp = parseInt(localStorage.getItem(KEY_LAST_MODIFIED) || '0');
+        // Normalize timestamps from both local storage and RestDB so comparisons behave predictably.
+        let remoteTimestamp = 0;
+        const remoteLastModified = remoteUser.last_modified;
+        if (typeof remoteLastModified === "number") {
+          if (Number.isFinite(remoteLastModified)) {
+            remoteTimestamp = remoteLastModified;
+          }
+        } else if (remoteLastModified) {
+          const parsedRemote = Date.parse(remoteLastModified);
+          if (Number.isFinite(parsedRemote)) {
+            remoteTimestamp = parsedRemote;
+          }
+        }
+
+        const localTimestampRaw = localStorage.getItem(KEY_LAST_MODIFIED);
+        let localTimestamp = 0;
+        if (localTimestampRaw) {
+          const parsedLocal = Number(localTimestampRaw);
+          if (Number.isFinite(parsedLocal)) {
+            localTimestamp = parsedLocal;
+          } else {
+            const dateParsedLocal = Date.parse(localTimestampRaw);
+            if (Number.isFinite(dateParsedLocal)) {
+              localTimestamp = dateParsedLocal;
+            }
+          }
+        }
         
         const localTimersExist = timers.length > 0;
         const remoteTimersAreEmpty = !remoteTimers || remoteTimers.length === 0;
@@ -1005,9 +1029,21 @@
   async function pushTimersToCloud(timersArray, timestampNumber) {
     if (!currentUser) return;
     
+    const timestampValue = Number(timestampNumber);
+    let safeTimestamp = Number.isFinite(timestampValue) ? timestampValue : null;
+    if (safeTimestamp === null && timestampNumber) {
+      const parsedTimestamp = Date.parse(timestampNumber);
+      if (Number.isFinite(parsedTimestamp)) {
+        safeTimestamp = parsedTimestamp;
+      }
+    }
+    if (safeTimestamp === null) {
+      safeTimestamp = Date.now();
+    }
+
     const payload = {
       timers: timersArray,
-      last_modified: new Date(timestampNumber).toISOString() // Convert timestamp number to ISO string for RestDB
+      last_modified: new Date(safeTimestamp).toISOString() // Convert timestamp number to ISO string for RestDB
     };
     
     try {
