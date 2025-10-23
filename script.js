@@ -103,18 +103,33 @@
     color: "Color"
   };
   const ROLE_STANDARD = "Standard";
+  const ROLE_CANONICAL = {
+    owner: "Owner",
+    "beta tester": "Beta Tester",
+    "special access": "Special Access",
+    standard: ROLE_STANDARD
+  };
   const PRO_MODE_ROLES = new Set(["beta tester", "special access", "owner"]);
 
   function normalizeRole(role) {
     if (typeof role === "string") {
       const trimmed = role.trim();
-      if (trimmed) return trimmed;
+      if (trimmed) {
+        const canonical = ROLE_CANONICAL[trimmed.toLowerCase()];
+        return canonical || trimmed;
+      }
     }
     return ROLE_STANDARD;
   }
 
+  function extractRoleFromRecord(record) {
+    if (!record || typeof record !== "object") return ROLE_STANDARD;
+    const rawRole = record.Role ?? record.role;
+    return normalizeRole(rawRole);
+  }
+
   function getCurrentRole() {
-    return currentUser?.role ? normalizeRole(currentUser.role) : ROLE_STANDARD;
+    return currentUser ? extractRoleFromRecord(currentUser) : ROLE_STANDARD;
   }
 
   function userCanUseProMode() {
@@ -147,7 +162,9 @@
       if (userRaw) {
         currentUser = JSON.parse(userRaw);
         if (currentUser) {
-          currentUser.role = normalizeRole(currentUser.role);
+          const storedRole = currentUser.role ?? currentUser.Role;
+          currentUser.role = normalizeRole(storedRole);
+          delete currentUser.Role;
           localStorage.setItem(KEY_USER, JSON.stringify(currentUser));
         }
         updateUIForLoginState();
@@ -873,7 +890,7 @@
     const newUser = {
         email,
         password,
-        role: ROLE_STANDARD,
+        Role: ROLE_STANDARD,
         timers: [], // Use JSON type, send empty array
         last_modified: new Date().toISOString() // Use DateTime type, send ISO string
     };
@@ -911,7 +928,7 @@
         return;
     }
 
-    currentUser = { id: user._id, email: user.email, role: normalizeRole(user.role) };
+    currentUser = { id: user._id, email: user.email, role: extractRoleFromRecord(user) };
     localStorage.setItem(KEY_USER, JSON.stringify(currentUser));
     updateUIForLoginState();
     authDialog.close();
@@ -945,8 +962,7 @@
         
         const remoteUser = await response.json();
         const remoteTimers = remoteUser.timers || [];
-        const remoteRoleRaw = remoteUser.role;
-        const remoteRole = (typeof remoteRoleRaw === "string" && remoteRoleRaw.trim()) ? normalizeRole(remoteRoleRaw) : getCurrentRole();
+        const remoteRole = extractRoleFromRecord(remoteUser);
         currentUser.role = remoteRole;
         localStorage.setItem(KEY_USER, JSON.stringify(currentUser));
         updateUIForLoginState();
