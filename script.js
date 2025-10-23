@@ -72,6 +72,11 @@
   const KEY_USER = "hyperTimer_v6_user";
   const TPL = "hyperTimer_templates_v1";
   const PRO_SPLIT_STYLES = ["multibar", "letters", "color"];
+  const PRO_SPLIT_LABELS = {
+    multibar: "Multi Bar",
+    letters: "Letters",
+    color: "Color"
+  };
 
   async function updateAndSaveTimers(newTimersArray = null) {
     if (newTimersArray) {
@@ -1024,184 +1029,223 @@
   addBtn.addEventListener("click", ()=>openEditor(null,null));
   fab.addEventListener("click", ()=>openEditor(null,null));
 
+  function updateProMultiBarNote(card, t){
+    const note = card.querySelector('.split-note');
+    if (!note) return;
+    const plan = t.splitSettings?.multibar?.plan || t.mb_plan;
+    if (!plan){
+      note.textContent = 'Multi Bar';
+      return;
+    }
+    const ticks = Array.isArray(plan.ticks) ? plan.ticks.join(' × ') : '';
+    const parts = [];
+    if (plan.bars) parts.push(`${plan.bars} bars`);
+    if (ticks) parts.push(`${ticks} ticks`);
+    if (plan.dtMs) parts.push(`${Math.round(plan.dtMs/1000)}s step`);
+    note.textContent = parts.join(' • ') || 'Multi Bar';
+  }
+
+  function updateProLettersNote(card, t){
+    const note = card.querySelector('.split-note');
+    if (!note) return;
+    const total = Math.max(1000, t.total0 || baseTotal(t));
+    const lettersPlan = t.splitSettings?.letters || planLetters(total, t.letters_n||null);
+    if (!lettersPlan){
+      note.textContent = 'Letters';
+      return;
+    }
+    const parts = [`${lettersPlan.n} letter${lettersPlan.n===1?'':'s'}`];
+    if (lettersPlan.frameMs) parts.push(`${(lettersPlan.frameMs/1000).toFixed(2)}s/frame`);
+    note.textContent = parts.join(' • ');
+  }
+
+  function updateProColorPreview(card, t, progress, accent=null){
+    const preview = card.querySelector('.split-color-preview');
+    if (!preview) return;
+    const colorInfo = t.splitSettings?.color || {};
+    const startHex = (colorInfo.start || t.color || "#6c7bff").toUpperCase();
+    const endHex = (colorInfo.end || t.color2 || t.color || "#6c7bff").toUpperCase();
+    const chips = preview.querySelectorAll('.split-color-chip');
+    if (chips[0]) chips[0].textContent = startHex;
+    if (chips[1]) chips[1].textContent = endHex;
+    const activeAccent = accent || currentAccentColor({ ...t, style: "color" }, progress);
+    if (activeAccent){
+      preview.style.background = `linear-gradient(135deg, ${activeAccent.startCss} 0%, ${activeAccent.endCss} 100%)`;
+      preview.style.borderColor = rgbaString(activeAccent.rgb, activeAccent.isLight ? 0.28 : 0.32);
+      preview.classList.toggle('light', activeAccent.isLight);
+      preview.classList.toggle('dark', !activeAccent.isLight);
+      preview.style.color = activeAccent.isLight ? '#05070b' : '#f7f8ff';
+      chips.forEach(chip => {
+        chip.style.background = activeAccent.isLight ? 'rgba(255,255,255,0.68)' : 'rgba(0,0,0,0.35)';
+        chip.style.color = activeAccent.isLight ? '#05070b' : '#f7f8ff';
+      });
+    }
+    const note = card.querySelector('.split-note');
+    if (note) note.textContent = `${startHex} → ${endHex}`;
+  }
+
+  function createColorPreviewElement(){
+    const preview = document.createElement("div");
+    preview.className = "split-color-preview";
+    const chips = document.createElement("div");
+    chips.className = "split-color-chips";
+    const startChip = document.createElement("span");
+    startChip.className = "split-color-chip";
+    const endChip = document.createElement("span");
+    endChip.className = "split-color-chip";
+    chips.append(startChip, endChip);
+    preview.appendChild(chips);
+    return preview;
+  }
+
+  function createTimerCard(t, splitStyle=null){
+    const fallbackStyle = t.style || "bar";
+    const displayStyle = splitStyle ? (splitStyle === "color" ? "color" : splitStyle) : fallbackStyle;
+    const timerForVisual = displayStyle === (t.style || "") ? t : { ...t, style: displayStyle };
+    const progress = visualProgress(t);
+
+    const card = document.createElement("div");
+    card.className = "card";
+    card.dataset.id = t.id;
+    card.dataset.displayStyle = displayStyle;
+    if (splitStyle) card.dataset.proPart = splitStyle;
+
+    const actions = document.createElement("div");
+    actions.className = "actions";
+    const pauseBtn = (t.mode==="datetime" || t.mode==="smart") ? "" : `<button class="action-btn" data-act="pause" title="${t.paused?'Resume':'Pause'}">⏯︎</button>`;
+    actions.innerHTML = `${pauseBtn}<button class="action-btn" data-act="prestige" title="Prestige">★</button><button class="action-btn" data-act="tplsave" title="Save template">⇪</button><button class="action-btn" data-act="edit" title="Edit">✎</button><button class="action-btn" data-act="delete" title="Delete">🗑</button>`;
+    card.appendChild(actions);
+
+    const title = document.createElement("div");
+    title.className="title";
+    const dotEl = document.createElement("span");
+    dotEl.className="dot";
+    dotEl.dataset.role="accent-dot";
+    title.appendChild(dotEl);
+    const nameEl = document.createElement("span");
+    nameEl.textContent = t.name || "Untitled";
+    title.appendChild(nameEl);
+    if (t.prestigeLevel){
+      const badgeEl = document.createElement("span");
+      badgeEl.className = "badge";
+      badgeEl.textContent = `Prestige ${t.prestigeLevel}`;
+      title.appendChild(badgeEl);
+    }
+    card.appendChild(title);
+
+    const subt = document.createElement("div");
+    const unitLabel = t.units==="custom" ? "Custom" : t.units.toUpperCase();
+    let styleLabel;
+    if (splitStyle){
+      const baseLabel = PRO_SPLIT_LABELS[splitStyle] || splitStyle.toUpperCase();
+      styleLabel = `Pro • ${baseLabel}`;
+    } else {
+      styleLabel = t.style === "pro" ? "PRO MODE" : (fallbackStyle||"bar").toUpperCase();
+    }
+    subt.className="subtitle";
+    subt.textContent = (t.mode==="duration"?"Duration":(t.mode==="smart"?"Smart":"Target"))+" • "+styleLabel+" • "+unitLabel;
+    card.appendChild(subt);
+
+    const big = makeBig(t);
+
+    if (splitStyle === "color"){
+      const preview = createColorPreviewElement();
+      card.appendChild(preview);
+      card.appendChild(big);
+      const note = document.createElement("div");
+      note.className = "split-note";
+      card.appendChild(note);
+    } else if (["ring","pie","multibar","letters"].includes(displayStyle)){
+      const wrap = document.createElement("div"); wrap.className="canvaswrap";
+      const cvs = makeCanvas(280); wrap.appendChild(cvs); card.appendChild(wrap);
+      drawVisual(cvs, timerForVisual);
+      card.appendChild(big);
+      if (splitStyle){
+        const note = document.createElement("div");
+        note.className = "split-note";
+        card.appendChild(note);
+      }
+    } else if (displayStyle === "bar"){
+      card.appendChild(big);
+      const bar = document.createElement("div");
+      bar.className="progressbar";
+      const fill = document.createElement("div");
+      fill.style.background = timerForVisual.color;
+      bar.appendChild(fill);
+      card.appendChild(bar);
+      fill.style.width = (progress*100).toFixed(2)+"%";
+    } else {
+      card.appendChild(big);
+    }
+
+    if (splitStyle === "multibar") updateProMultiBarNote(card, t);
+    else if (splitStyle === "letters") updateProLettersNote(card, t);
+
+    if (splitStyle === "color"){
+      const colorTimer = timerForVisual.style === "color" ? timerForVisual : { ...timerForVisual, style: "color" };
+      const accent = currentAccentColor(colorTimer, progress);
+      updateProColorPreview(card, t, progress, accent);
+      updateCardVisuals(card, colorTimer, accent);
+    } else {
+      const accent = currentAccentColor(timerForVisual, progress);
+      updateCardVisuals(card, timerForVisual, accent);
+    }
+
+    const foot = document.createElement("div");
+    foot.className="footer-row";
+    const pill = document.createElement("span"); pill.className="pill"; pill.dataset.role="accent-pill";
+    pill.textContent="Copy remaining"; pill.addEventListener("click", ()=>{ navigator.clipboard?.writeText(fmt(remainingMs(t), t.units, t.ms==='on', t.units==='custom'?t.format:null, t.name)); pill.textContent="Copied ✓"; setTimeout(()=>pill.textContent="Copy remaining", 900);});
+    foot.appendChild(pill);
+
+    const eta = document.createElement("span"); eta.className="note";
+    if (t.mode==="datetime" || t.mode==="smart"){ const d=new Date(t.targetMs); eta.textContent="Ends "+d.toLocaleString(); }
+    else { const d = new Date(t.start + (t.duration||0)); eta.textContent = "ETA " + d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}); }
+    foot.appendChild(eta);
+    card.appendChild(foot);
+
+    actions.addEventListener("click", async ev=>{
+      const act = ev.target?.dataset?.act;
+      if (!act) return;
+      if (act==="pause"){
+        const remNow = remainingMs(t);
+        t.paused = !t.paused;
+        if (t.paused){ t.pausedAt = Date.now(); t.leftWhenPaused = remNow; }
+        else { const delta = Date.now() - (t.pausedAt||Date.now()); if (t.mode==="duration"){ t.start += delta; } else { t.targetMs += delta; } delete t.pausedAt; }
+        render();
+      } else if (act==="edit"){
+        openEditor(t.id);
+      } else if (act==="delete"){
+        if (confirm("Delete timer?")){
+          const newTimers = timers.filter(x=>x.id!==t.id);
+          await updateAndSaveTimers(newTimers);
+        }
+      } else if (act==="prestige"){
+        doPrestige(t);
+        await updateAndSaveTimers();
+      } else if (act==="tplsave"){
+        saveTemplateFromTimer(t);
+      }
+    });
+
+    return card;
+  }
+
+  function buildTimerCards(t){
+    if (t.style === "pro"){
+      ensureProSplitState(t);
+      const splits = Array.isArray(t.splitStyles) && t.splitStyles.length ? t.splitStyles : PRO_SPLIT_STYLES;
+      return splits.map(styleName => createTimerCard(t, styleName));
+    }
+    return [createTimerCard(t, null)];
+  }
+
   function render(){
     grid.innerHTML = "";
     timers.sort((a,b)=> remainingMs(a) - remainingMs(b));
 
     timers.forEach(t => {
-      const card = document.createElement("div");
-      card.className="card"; card.dataset.id=t.id;
-
-      const progress = visualProgress(t);
-
-      const actions = document.createElement("div");
-      actions.className="actions";
-      const pauseBtn = (t.mode==="datetime" || t.mode==="smart") ? "" : `<button class="action-btn" data-act="pause" title="${t.paused?'Resume':'Pause'}">⏯︎</button>`;
-      actions.innerHTML = `${pauseBtn}<button class="action-btn" data-act="prestige" title="Prestige">★</button><button class="action-btn" data-act="tplsave" title="Save template">⇪</button><button class="action-btn" data-act="edit" title="Edit">✎</button><button class="action-btn" data-act="delete" title="Delete">🗑</button>`;
-      card.appendChild(actions);
-
-      const title = document.createElement("div");
-      title.className="title";
-      const dotEl = document.createElement("span");
-      dotEl.className = "dot";
-      dotEl.dataset.role = "accent-dot";
-      title.appendChild(dotEl);
-      const nameEl = document.createElement("span");
-      nameEl.textContent = t.name || "Untitled";
-      title.appendChild(nameEl);
-      if (t.prestigeLevel){
-        const badgeEl = document.createElement("span");
-        badgeEl.className = "badge";
-        badgeEl.textContent = `Prestige ${t.prestigeLevel}`;
-        title.appendChild(badgeEl);
-      }
-      card.appendChild(title);
-
-      const subt = document.createElement("div");
-      const unitLabel = t.units==="custom" ? "Custom" : t.units.toUpperCase();
-      const styleLabel = t.style === "pro" ? "PRO MODE" : (t.style||"bar").toUpperCase();
-      subt.className="subtitle";
-      subt.textContent = (t.mode==="duration"?"Duration":(t.mode==="smart"?"Smart":"Target"))+" • "+styleLabel+" • "+unitLabel;
-      card.appendChild(subt);
-
-      if (t.style === "pro"){
-        ensureProSplitState(t);
-        const big = makeBig(t); card.appendChild(big);
-        const splitWrap = document.createElement("div");
-        splitWrap.className = "split-wrap";
-        const splits = Array.isArray(t.splitStyles) && t.splitStyles.length ? t.splitStyles : PRO_SPLIT_STYLES;
-        splitWrap.classList.add(`split-count-${splits.length}`);
-        const labelMap = { multibar: "Multi Bar", letters: "Letters", color: "Color" };
-        splits.forEach(styleName => {
-          const item = document.createElement("div");
-          item.className = `split-item split-${styleName}`;
-          item.dataset.splitStyle = styleName;
-          const label = document.createElement("div");
-          label.className = "split-item-label";
-          label.textContent = labelMap[styleName] || styleName;
-          item.appendChild(label);
-          if (styleName === "color"){
-            const preview = document.createElement("div");
-            preview.className = "split-color-preview";
-            const colorInfo = t.splitSettings?.color || {};
-            const startHex = (colorInfo.start || t.color || "#6c7bff").toUpperCase();
-            const endHex = (colorInfo.end || t.color2 || t.color || "#6c7bff").toUpperCase();
-            const accentSample = currentAccentColor({ ...t, style: "color" }, progress);
-            if (accentSample){
-              preview.style.background = `linear-gradient(135deg, ${accentSample.startCss} 0%, ${accentSample.endCss} 100%)`;
-              preview.style.borderColor = rgbaString(accentSample.rgb, accentSample.isLight ? 0.28 : 0.32);
-              preview.classList.toggle("light", accentSample.isLight);
-              preview.classList.toggle("dark", !accentSample.isLight);
-              preview.style.color = accentSample.isLight ? '#05070b' : '#f7f8ff';
-            }
-            const chips = document.createElement("div");
-            chips.className = "split-color-chips";
-            const startChip = document.createElement("span");
-            startChip.className = "split-color-chip";
-            startChip.textContent = startHex;
-            const endChip = document.createElement("span");
-            endChip.className = "split-color-chip";
-            endChip.textContent = endHex;
-            const chipBg = accentSample && accentSample.isLight ? "rgba(255,255,255,0.68)" : "rgba(0,0,0,0.35)";
-            const chipColor = accentSample && accentSample.isLight ? "#05070b" : "#f7f8ff";
-            [startChip, endChip].forEach(chip => {
-              chip.style.background = chipBg;
-              chip.style.color = chipColor;
-            });
-            chips.append(startChip, endChip);
-            preview.appendChild(chips);
-            item.appendChild(preview);
-            const note = document.createElement("div");
-            note.className = "split-note";
-            note.textContent = `${startHex} → ${endHex}`;
-            item.appendChild(note);
-          } else {
-            const wrap = document.createElement("div"); wrap.className = "canvaswrap";
-            const cvs = makeCanvas(220); wrap.appendChild(cvs); item.appendChild(wrap);
-            drawVisual(cvs,{ ...t, style: styleName });
-            const note = document.createElement("div");
-            note.className = "split-note";
-            if (styleName === "multibar"){
-              const plan = t.splitSettings?.multibar?.plan || t.mb_plan;
-              if (plan){
-                const ticks = Array.isArray(plan.ticks) ? plan.ticks.join(' × ') : '';
-                const parts = [];
-                if (plan.bars) parts.push(`${plan.bars} bars`);
-                if (ticks) parts.push(`${ticks} ticks`);
-                if (plan.dtMs) parts.push(`${Math.round(plan.dtMs/1000)}s step`);
-                note.textContent = parts.join(' • ') || 'Multi Bar';
-              } else {
-                note.textContent = 'Multi Bar';
-              }
-            } else if (styleName === "letters"){
-              const lettersPlan = t.splitSettings?.letters || planLetters(Math.max(1000, t.total0 || baseTotal(t)), t.letters_n||null);
-              if (lettersPlan){
-                const parts = [`${lettersPlan.n} letter${lettersPlan.n===1?'':'s'}`];
-                if (lettersPlan.frameMs) parts.push(`${(lettersPlan.frameMs/1000).toFixed(2)}s/frame`);
-                note.textContent = parts.join(' • ');
-              } else {
-                note.textContent = 'Letters';
-              }
-            }
-            item.appendChild(note);
-          }
-          splitWrap.appendChild(item);
-        });
-        card.appendChild(splitWrap);
-      } else if (["ring","pie","multibar","letters"].includes(t.style)){
-        const wrap = document.createElement("div"); wrap.className="canvaswrap";
-        const cvs = makeCanvas(280); wrap.appendChild(cvs); card.appendChild(wrap);
-        drawVisual(cvs,t);
-        const big = makeBig(t); card.appendChild(big);
-      } else if (t.style === "bar"){
-        const big = makeBig(t); card.appendChild(big);
-        const bar = document.createElement("div"); bar.className="progressbar";
-        const fill = document.createElement("div"); fill.style.background=t.color; bar.appendChild(fill); card.appendChild(bar);
-        fill.style.width = (progress*100).toFixed(2)+"%";
-      } else {
-        const big = makeBig(t); card.appendChild(big);
-      }
-
-      const foot = document.createElement("div");
-      foot.className="footer-row";
-      const pill = document.createElement("span"); pill.className="pill"; pill.dataset.role="accent-pill";
-      pill.textContent="Copy remaining"; pill.addEventListener("click", ()=>{ navigator.clipboard?.writeText(fmt(remainingMs(t), t.units, t.ms==='on', t.units==='custom'?t.format:null, t.name)); pill.textContent="Copied ✓"; setTimeout(()=>pill.textContent="Copy remaining", 900);});
-      foot.appendChild(pill);
-
-      const eta = document.createElement("span"); eta.className="note";
-      if (t.mode==="datetime" || t.mode==="smart"){ const d=new Date(t.targetMs); eta.textContent="Ends "+d.toLocaleString(); }
-      else { const d = new Date(t.start + (t.duration||0)); eta.textContent = "ETA " + d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}); }
-      foot.appendChild(eta);
-      card.appendChild(foot);
-
-      const accent = currentAccentColor(t, progress);
-      updateCardVisuals(card, t, accent);
-
-      actions.addEventListener("click", async ev=>{
-        const act = ev.target?.dataset?.act;
-        if (!act) return;
-        if (act==="pause"){
-          const remNow = remainingMs(t);
-          t.paused = !t.paused;
-          if (t.paused){ t.pausedAt = Date.now(); t.leftWhenPaused = remNow; }
-          else { const delta = Date.now() - (t.pausedAt||Date.now()); if (t.mode==="duration"){ t.start += delta; } else { t.targetMs += delta; } delete t.pausedAt; }
-          render();
-        } else if (act==="edit"){
-          openEditor(t.id);
-        } else if (act==="delete"){
-          if (confirm("Delete timer?")){ 
-            const newTimers = timers.filter(x=>x.id!==t.id);
-            await updateAndSaveTimers(newTimers);
-          }
-        } else if (act==="prestige"){
-          doPrestige(t); 
-          await updateAndSaveTimers();
-        } else if (act==="tplsave"){
-          saveTemplateFromTimer(t);
-        }
-      });
-
-      grid.appendChild(card);
+      const cards = buildTimerCards(t);
+      cards.forEach(card => grid.appendChild(card));
     });
   }
 
@@ -1426,77 +1470,45 @@
 
   function tick(){
     timers.forEach(t=>{
-      const card = grid.querySelector('.card[data-id="'+t.id+'"]'); if(!card) return;
-      const txt = card.querySelector(".big .flip");
+      if (t.style === "pro") ensureProSplitState(t);
+      const cards = grid.querySelectorAll('.card[data-id="'+t.id+'"]');
+      if (!cards.length) return;
       const template = t.units==="custom" ? t.format : null;
       const newTxt = fmt(remainingForDisplay(t), t.units, t.ms==="on", template, t.name);
       const progress = visualProgress(t);
-      if (txt && txt.textContent !== newTxt){ txt.textContent=newTxt; txt.style.transform="perspective(400px) rotateX(16deg)"; setTimeout(()=>txt.style.transform="perspective(400px) rotateX(0deg)", 120); }
 
-      if (t.style === "pro"){
-        ensureProSplitState(t);
-        const splitItems = card.querySelectorAll('[data-split-style]');
-        splitItems.forEach(item => {
-          const styleName = item.dataset.splitStyle;
-          if (styleName === "color"){
-            const preview = item.querySelector('.split-color-preview');
-            const colorInfo = t.splitSettings?.color || {};
-            const startHex = (colorInfo.start || t.color || "#6c7bff").toUpperCase();
-            const endHex = (colorInfo.end || t.color2 || t.color || "#6c7bff").toUpperCase();
-            if (preview){
-              const accentSample = currentAccentColor({ ...t, style: "color" }, progress);
-              if (accentSample){
-                preview.style.background = `linear-gradient(135deg, ${accentSample.startCss} 0%, ${accentSample.endCss} 100%)`;
-                preview.style.borderColor = rgbaString(accentSample.rgb, accentSample.isLight ? 0.28 : 0.32);
-                preview.classList.toggle('light', accentSample.isLight);
-                preview.classList.toggle('dark', !accentSample.isLight);
-                preview.style.color = accentSample.isLight ? '#05070b' : '#f7f8ff';
-                const chips = preview.querySelectorAll('.split-color-chip');
-                chips.forEach(chip => {
-                  chip.style.background = accentSample.isLight ? 'rgba(255,255,255,0.68)' : 'rgba(0,0,0,0.35)';
-                  chip.style.color = accentSample.isLight ? '#05070b' : '#f7f8ff';
-                });
-              }
-              const note = item.querySelector('.split-note');
-              if (note) note.textContent = `${startHex} → ${endHex}`;
-            }
-          } else {
-            const canvas = item.querySelector('canvas');
-            if (canvas) drawVisual(canvas, { ...t, style: styleName });
-            if (styleName === 'multibar'){
-              const note = item.querySelector('.split-note');
-              if (note){
-                const plan = t.splitSettings?.multibar?.plan || t.mb_plan;
-                if (plan){
-                  const ticks = Array.isArray(plan.ticks) ? plan.ticks.join(' × ') : '';
-                  const parts = [];
-                  if (plan.bars) parts.push(`${plan.bars} bars`);
-                  if (ticks) parts.push(`${ticks} ticks`);
-                  if (plan.dtMs) parts.push(`${Math.round(plan.dtMs/1000)}s step`);
-                  note.textContent = parts.join(' • ') || 'Multi Bar';
-                }
-              }
-            } else if (styleName === 'letters'){
-              const note = item.querySelector('.split-note');
-              if (note){
-                const lettersPlan = t.splitSettings?.letters || planLetters(Math.max(1000, t.total0 || baseTotal(t)), t.letters_n||null);
-                if (lettersPlan){
-                  const parts = [`${lettersPlan.n} letter${lettersPlan.n===1?'':'s'}`];
-                  if (lettersPlan.frameMs) parts.push(`${(lettersPlan.frameMs/1000).toFixed(2)}s/frame`);
-                  note.textContent = parts.join(' • ');
-                }
-              }
-            }
-          }
-        });
-      } else if (["ring","pie","multibar","letters"].includes(t.style)){
-        const cvs = card.querySelector("canvas"); if (cvs) drawVisual(cvs,t);
-      } else if (t.style === "bar"){
-        const fill = card.querySelector(".progressbar > div"); if (fill) fill.style.width=(progress*100).toFixed(2)+"%";
-      }
+      cards.forEach(card => {
+        const txt = card.querySelector(".big .flip");
+        if (txt && txt.textContent !== newTxt){
+          txt.textContent = newTxt;
+          txt.style.transform = "perspective(400px) rotateX(16deg)";
+          setTimeout(()=>txt.style.transform = "perspective(400px) rotateX(0deg)", 120);
+        }
 
-      const accent = currentAccentColor(t, progress);
-      updateCardVisuals(card, t, accent);
+        const displayStyle = card.dataset.displayStyle || t.style || "bar";
+        const timerForVisual = displayStyle === (t.style || "") ? t : { ...t, style: displayStyle };
+
+        if (displayStyle === "bar"){
+          const fill = card.querySelector(".progressbar > div");
+          if (fill) fill.style.width = (progress*100).toFixed(2)+"%";
+        } else if (["ring","pie","multibar","letters"].includes(displayStyle)){
+          const cvs = card.querySelector("canvas");
+          if (cvs) drawVisual(cvs, timerForVisual);
+          if (card.dataset.proPart === "multibar") updateProMultiBarNote(card, t);
+          if (card.dataset.proPart === "letters") updateProLettersNote(card, t);
+        }
+
+        let accentTimer = timerForVisual;
+        let accent;
+        if (card.dataset.proPart === "color"){
+          accentTimer = timerForVisual.style === "color" ? timerForVisual : { ...timerForVisual, style: "color" };
+          accent = currentAccentColor(accentTimer, progress);
+          updateProColorPreview(card, t, progress, accent);
+        } else {
+          accent = currentAccentColor(accentTimer, progress);
+        }
+        updateCardVisuals(card, accentTimer, accent);
+      });
 
       const prevRem = t._prevRem ?? remainingMs(t);
       const rem = remainingMs(t); const total = t.total0 || baseTotal(t);
