@@ -12,15 +12,10 @@
   <div class="topbar">
     <div class="brand">HyperTimer <span class="note" style="margin-left:.4rem;">v6.2.1</span></div><div class="spacer"></div>
     <div class="controls">
-      <div id="accountControls">
-        <button class="btn" id="loginBtn">Log In</button>
-        <button class="btn primary" id="signupBtn">Sign Up</button>
-      </div>
-      <div id="userSession" class="invisible" style="display:flex; gap:.5rem; align-items:center;">
-        <span id="userEmailDisplay" class="note"></span>
-        <button class="btn" id="syncBtn">Sync</button>
-        <button class="btn" id="logoutBtn">Log Out</button>
-      </div>
+      <button class="btn icon" id="settingsBtn" aria-haspopup="dialog" aria-expanded="false">
+        <span class="icon" aria-hidden="true">⚙</span>
+        <span class="label">Settings</span>
+      </button>
       <button class="btn" id="exportBtn">Export</button>
       <label class="btn">Import <input id="importInput" type="file" accept="application/json" style="display:none;"></label>
       <button class="btn" id="tplBtn">Templates ▾</button>
@@ -69,6 +64,7 @@
             <option value="color">Color</option>
             <option value="pro">Pro Mode (Split)</option>
           </select>
+          <div class="note invisible" id="proAccessNotice">Pro Mode requires a Beta Tester, Special Access, or Owner role.</div>
         </div>
       </div>
       <div id="durationFields" class="field-row">
@@ -196,6 +192,35 @@
           <button class="btn" value="cancel">Cancel</button>
           <button class="btn primary" id="saveBtn" type="button">Save</button>
         </div>
+      </div>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="settingsDialog">
+  <form method="dialog" novalidate>
+    <div class="dialog-header">
+      <div class="title">Settings</div>
+      <button class="btn" value="cancel" style="line-height:1;">✕</button>
+    </div>
+    <div class="dialog-body settings-body">
+      <div id="settingsSignedOut" class="settings-section">
+        <div class="note">Sign in to sync timers and unlock experimental features.</div>
+        <div class="settings-actions">
+          <button class="btn" type="button" id="settingsLoginBtn">Log In</button>
+          <button class="btn primary" type="button" id="settingsSignupBtn">Sign Up</button>
+        </div>
+      </div>
+      <div id="settingsSignedIn" class="settings-section invisible">
+        <div class="settings-summary">
+          <div class="note">Signed in as</div>
+          <div id="settingsUserEmail" class="settings-value"></div>
+        </div>
+        <div class="settings-actions">
+          <button class="btn" type="button" id="settingsSyncBtn">Sync Now</button>
+          <button class="btn" type="button" id="settingsLogoutBtn">Log Out</button>
+        </div>
+        <div class="settings-role invisible" id="settingsRoleDisplay"></div>
       </div>
     </div>
   </form>

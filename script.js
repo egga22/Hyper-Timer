@@ -39,13 +39,17 @@
   const tplBtn = $("#tplBtn");
   const pauseAllBtn = $("#pauseAllBtn");
 
-  const accountControls = $("#accountControls");
-  const userSession = $("#userSession");
-  const loginBtn = $("#loginBtn");
-  const signupBtn = $("#signupBtn");
-  const logoutBtn = $("#logoutBtn");
-  const syncBtn = $("#syncBtn");
-  const userEmailDisplay = $("#userEmailDisplay");
+  const settingsBtn = $("#settingsBtn");
+  const settingsDialog = $("#settingsDialog");
+  const settingsSignedOut = $("#settingsSignedOut");
+  const settingsSignedIn = $("#settingsSignedIn");
+  const settingsLoginBtn = $("#settingsLoginBtn");
+  const settingsSignupBtn = $("#settingsSignupBtn");
+  const settingsLogoutBtn = $("#settingsLogoutBtn");
+  const settingsSyncBtn = $("#settingsSyncBtn");
+  const settingsUserEmail = $("#settingsUserEmail");
+  const settingsRoleDisplay = $("#settingsRoleDisplay");
+  const proAccessNotice = $("#proAccessNotice");
   const authDialog = $("#authDialog");
 
   const f = {
@@ -63,6 +67,27 @@
   };
   const customFormatRow = $("#customFormatRow");
 
+  let lastStyleSelection = f.style ? f.style.value : "bar";
+  if (f.style) {
+    f.style.addEventListener("focus", () => {
+      lastStyleSelection = f.style.value;
+    });
+    f.style.addEventListener("change", () => {
+      if (f.style.value === "pro" && !userCanUseProMode()) {
+        const fallback = lastStyleSelection === "pro" ? "bar" : (lastStyleSelection || "bar");
+        f.style.value = fallback;
+        lastStyleSelection = f.style.value;
+        toggleProAccessNotice(true);
+        updateStyleUI();
+        return;
+      }
+      lastStyleSelection = f.style.value;
+      toggleProAccessNotice(false);
+      updateStyleUI();
+    });
+  }
+  toggleProAccessNotice(false);
+
   let timers = [];
   let templates = [];
   let editId = null;
@@ -77,6 +102,30 @@
     letters: "Letters",
     color: "Color"
   };
+  const ROLE_STANDARD = "Standard";
+  const PRO_MODE_ROLES = new Set(["beta tester", "special access", "owner"]);
+
+  function normalizeRole(role) {
+    if (typeof role === "string") {
+      const trimmed = role.trim();
+      if (trimmed) return trimmed;
+    }
+    return ROLE_STANDARD;
+  }
+
+  function getCurrentRole() {
+    return currentUser?.role ? normalizeRole(currentUser.role) : ROLE_STANDARD;
+  }
+
+  function userCanUseProMode() {
+    const role = getCurrentRole().toLowerCase();
+    return PRO_MODE_ROLES.has(role);
+  }
+
+  function toggleProAccessNotice(show) {
+    if (!proAccessNotice) return;
+    proAccessNotice.classList.toggle("invisible", !show);
+  }
 
   async function updateAndSaveTimers(newTimersArray = null) {
     if (newTimersArray) {
@@ -97,6 +146,10 @@
       const userRaw = localStorage.getItem(KEY_USER);
       if (userRaw) {
         currentUser = JSON.parse(userRaw);
+        if (currentUser) {
+          currentUser.role = normalizeRole(currentUser.role);
+          localStorage.setItem(KEY_USER, JSON.stringify(currentUser));
+        }
         updateUIForLoginState();
       }
       const raw = localStorage.getItem(KEY_TIMERS);
@@ -476,6 +529,10 @@
     return `${tpl.style} • ${tpl.units} • ${Math.random().toString(36).slice(2,6)}`;
   }
   function saveTemplateFromTimer(t){
+    if (t.style === "pro" && !userCanUseProMode()) {
+      alert("Pro Mode templates require Beta Tester or higher accounts.");
+      return;
+    }
     if (t.style === "pro") ensureProSplitState(t);
     const tpl = { id:uid("tpl_"), style:t.style, color:t.color, color2:t.color2, units:t.units, format:t.format,
       ring_thickness:t.ring_thickness, ease:t.ease, tick:t.tick, ms:t.ms, dotsCount:t.dotsCount, mb_bars:t.mb_bars, mb_ticks:t.mb_ticks, letters_n:t.letters_n,
@@ -641,6 +698,16 @@
     f.units.value=draft.units||"auto"; f.format.value=draft.format||"{HH}:{mm}:{ss}";
     f.ring_thickness.value=draft.ring_thickness??10; f.ease.value=draft.ease||"linear"; f.tick.value=draft.tick??100; f.ms.value=draft.ms||"off";
     f.mb_bars.value = draft.mb_bars ?? ""; f.mb_ticks.value = draft.mb_ticks ?? ""; if (f.letters_n) f.letters_n.value = draft.letters_n ?? "";
+    if (f.style) {
+      lastStyleSelection = f.style.value;
+      if (!userCanUseProMode() && f.style.value === "pro") {
+        toggleProAccessNotice(true);
+        f.style.value = "bar";
+        lastStyleSelection = f.style.value;
+      } else {
+        toggleProAccessNotice(false);
+      }
+    }
     if (f.smartMethod) f.smartMethod.value = draft.smartMethod || "manifold";
     if (f.smartUrl) f.smartUrl.value = draft.smartUrl || "";
     if (draft.startOverrideMs && typeof draft.startOverrideMs === "number"){
@@ -659,7 +726,6 @@
     ;['change','input'].forEach(ev=>{
       [f.days,f.hours,f.minutes,f.seconds,f.when,f.letters_n,f.startWhen,f.startPct]
         .forEach(el=> el && el.addEventListener(ev, updateLettersPreview));
-      if (f.style) f.style.addEventListener('change', updateStyleUI);
     });
     updateStyleUI();
 
@@ -696,13 +762,47 @@
   
   function updateUIForLoginState() {
     const isLoggedIn = !!currentUser;
-    accountControls.classList.toggle('invisible', isLoggedIn);
-    userSession.classList.toggle('invisible', !isLoggedIn);
-    if (isLoggedIn) {
-      userEmailDisplay.textContent = currentUser.email;
+    const role = getCurrentRole();
+    if (settingsSignedIn) settingsSignedIn.classList.toggle('invisible', !isLoggedIn);
+    if (settingsSignedOut) settingsSignedOut.classList.toggle('invisible', isLoggedIn);
+    if (settingsUserEmail) settingsUserEmail.textContent = isLoggedIn ? currentUser.email : "";
+    if (settingsRoleDisplay) {
+      if (isLoggedIn) {
+        settingsRoleDisplay.textContent = `Role: ${role}`;
+        settingsRoleDisplay.classList.remove('invisible');
+      } else {
+        settingsRoleDisplay.textContent = "";
+        settingsRoleDisplay.classList.add('invisible');
+      }
     }
+    if (settingsBtn) {
+      settingsBtn.title = isLoggedIn ? `Settings (${role})` : "Settings";
+      settingsBtn.dataset.role = role;
+    }
+    toggleProAccessNotice(false);
   }
-  
+
+  function openSettingsDialog() {
+    if (!settingsDialog) return;
+    updateUIForLoginState();
+    try {
+      settingsDialog.showModal ? settingsDialog.showModal() : settingsDialog.setAttribute("open", "");
+    } catch (e) {
+      settingsDialog.setAttribute("open", "");
+    }
+    if (settingsBtn) settingsBtn.setAttribute('aria-expanded', 'true');
+  }
+
+  function closeSettingsDialog() {
+    if (!settingsDialog) return;
+    try {
+      settingsDialog.close ? settingsDialog.close() : settingsDialog.removeAttribute("open");
+    } catch (e) {
+      settingsDialog.removeAttribute("open");
+    }
+    if (settingsBtn) settingsBtn.setAttribute('aria-expanded', 'false');
+  }
+
   function openAuthDialog(isSignUpMode = false) {
     const dialog = $("#authDialog");
     const title = $("#authTitle");
@@ -773,6 +873,7 @@
     const newUser = {
         email,
         password,
+        role: ROLE_STANDARD,
         timers: [], // Use JSON type, send empty array
         last_modified: new Date().toISOString() // Use DateTime type, send ISO string
     };
@@ -810,16 +911,17 @@
         return;
     }
 
-    currentUser = { id: user._id, email: user.email };
+    currentUser = { id: user._id, email: user.email, role: normalizeRole(user.role) };
     localStorage.setItem(KEY_USER, JSON.stringify(currentUser));
     updateUIForLoginState();
     authDialog.close();
-    
+
     await syncTimers();
   }
 
   function handleLogout() {
     if (confirm("Are you sure you want to log out? Your timers will remain on this device but will no longer sync.")) {
+      closeSettingsDialog();
       currentUser = null;
       localStorage.removeItem(KEY_USER);
       updateUIForLoginState();
@@ -830,8 +932,10 @@
   async function syncTimers() {
       if (!currentUser || isSyncing) return;
       isSyncing = true;
-      syncBtn.textContent = "Syncing...";
-      syncBtn.disabled = true;
+      if (settingsSyncBtn) {
+        settingsSyncBtn.textContent = "Syncing...";
+        settingsSyncBtn.disabled = true;
+      }
 
       try {
         const response = await fetch(`${RESTDB_URL}/${currentUser.id}`, {
@@ -841,6 +945,11 @@
         
         const remoteUser = await response.json();
         const remoteTimers = remoteUser.timers || [];
+        const remoteRoleRaw = remoteUser.role;
+        const remoteRole = (typeof remoteRoleRaw === "string" && remoteRoleRaw.trim()) ? normalizeRole(remoteRoleRaw) : getCurrentRole();
+        currentUser.role = remoteRole;
+        localStorage.setItem(KEY_USER, JSON.stringify(currentUser));
+        updateUIForLoginState();
         // RestDB returns DateTime as an ISO string. Date.parse() handles it correctly.
         const remoteTimestamp = remoteUser.last_modified ? Date.parse(remoteUser.last_modified) : 0;
         const localTimestamp = parseInt(localStorage.getItem(KEY_LAST_MODIFIED) || '0');
@@ -870,8 +979,10 @@
           alert("Sync failed. Please check your connection and try again.");
       } finally {
           isSyncing = false;
-          syncBtn.textContent = "Sync";
-          syncBtn.disabled = false;
+          if (settingsSyncBtn) {
+            settingsSyncBtn.textContent = "Sync Now";
+            settingsSyncBtn.disabled = false;
+          }
       }
   }
 
@@ -911,6 +1022,11 @@
       mb_ticks: f.mb_ticks.value? Math.max(8, Math.min(40, +f.mb_ticks.value)) : null,
       triggers, doneSoundDataUrl:null, doneTts: f.doneTts.value||""
     };
+    if (tpl.style === "pro" && !userCanUseProMode()) {
+      toggleProAccessNotice(true);
+      alert("Pro Mode is limited to Beta Tester or higher accounts.");
+      return;
+    }
     if (tpl.style === "pro"){
       tpl.splitStyles = [...PRO_SPLIT_STYLES];
       tpl.splitSettings = null;
@@ -930,6 +1046,11 @@
       mb_ticks: f.mb_ticks.value? Math.max(8, Math.min(40, +f.mb_ticks.value)) : null,
       letters_n: f.letters_n.value? Math.max(1, Math.min(7, +f.letters_n.value)) : null
     };
+    if (base.style === "pro" && !userCanUseProMode()) {
+      toggleProAccessNotice(true);
+      alert("Pro Mode is limited to Beta Tester or higher accounts.");
+      return;
+    }
     const existing = editId ? timers.find(x=>x.id===base.id) : null;
     const existingMap = new Map((existing?.triggers||[]).map(e=>[e.id,e]));
     const triggers = await collectTrEntries(existingMap);
@@ -1550,10 +1671,20 @@
     render(); // Pause is visual and doesn't need a full save/sync
   });
 
-  loginBtn.addEventListener('click', () => openAuthDialog(false));
-  signupBtn.addEventListener('click', () => openAuthDialog(true));
-  logoutBtn.addEventListener('click', handleLogout);
-  syncBtn.addEventListener('click', syncTimers);
+  if (settingsBtn) settingsBtn.addEventListener('click', () => openSettingsDialog());
+  if (settingsLoginBtn) settingsLoginBtn.addEventListener('click', () => {
+    closeSettingsDialog();
+    openAuthDialog(false);
+  });
+  if (settingsSignupBtn) settingsSignupBtn.addEventListener('click', () => {
+    closeSettingsDialog();
+    openAuthDialog(true);
+  });
+  if (settingsLogoutBtn) settingsLogoutBtn.addEventListener('click', handleLogout);
+  if (settingsSyncBtn) settingsSyncBtn.addEventListener('click', syncTimers);
+  if (settingsDialog) settingsDialog.addEventListener('close', () => {
+    if (settingsBtn) settingsBtn.setAttribute('aria-expanded', 'false');
+  });
   tplBtn.addEventListener("click", ()=> openTemplateMenu());
   document.addEventListener("click", (e)=>{ if(!templateMenu.contains(e.target) && e.target!==tplBtn){ templateMenu.classList.remove("open"); } });
   $("#authModeSwitch").addEventListener('click', (e) => {
@@ -1569,7 +1700,8 @@
     submitBtn.textContent = currentModeIsSignUp ? "Create Account" : "Log In";
   });
 
-  load(); 
+  updateUIForLoginState();
+  load();
   render(); 
   requestAnimationFrame(tick);
 })();
