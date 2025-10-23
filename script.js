@@ -358,6 +358,17 @@
       endCss: rgbToCss(startRgb)
     });
   }
+  function gradientBackgroundForAccent(accent, angle=140){
+    if (!accent) return "";
+    const prog = clamp(accent.progress ?? 0, 0, 1);
+    const start = accent.startRgb || accent.rgb;
+    const end = accent.endRgb || accent.rgb;
+    const towardsStart = blendRgb(accent.rgb, start, 1 - prog);
+    const towardsEnd = blendRgb(accent.rgb, end, prog);
+    const lightEdge = blendRgb(towardsStart, {r:255, g:255, b:255}, 0.18);
+    const darkEdge = blendRgb(towardsEnd, {r:0, g:0, b:0}, 0.25);
+    return `linear-gradient(${angle}deg, ${rgbToCss(lightEdge)} 0%, ${accent.css} 48%, ${rgbToCss(darkEdge)} 100%)`;
+  }
   function updateCardVisuals(card, t, accent){
     if (!card || !accent) return;
     const dot = card.querySelector('[data-role="accent-dot"]');
@@ -376,12 +387,8 @@
       card.classList.add('color-style');
       card.classList.toggle('color-style-light', accent.isLight);
       card.classList.toggle('color-style-dark', !accent.isLight);
-      const prog = clamp(accent.progress ?? 0, 0, 1);
-      const towardsStart = blendRgb(accent.rgb, accent.startRgb || accent.rgb, 1 - prog);
-      const towardsEnd = blendRgb(accent.rgb, accent.endRgb || accent.rgb, prog);
-      const lightEdge = blendRgb(towardsStart, {r:255, g:255, b:255}, 0.18);
-      const darkEdge = blendRgb(towardsEnd, {r:0, g:0, b:0}, 0.25);
-      card.style.background = `linear-gradient(140deg, ${rgbToCss(lightEdge)} 0%, ${accent.css} 48%, ${rgbToCss(darkEdge)} 100%)`;
+      const gradient = gradientBackgroundForAccent(accent);
+      card.style.background = gradient;
       card.style.borderColor = rgbaString(accent.rgb, accent.isLight ? 0.28 : 0.36);
       const textColor = accent.isLight ? '#05070b' : '#f7f8ff';
       const muted = accent.isLight ? 'rgba(0,0,0,0.62)' : 'rgba(255,255,255,0.78)';
@@ -1070,8 +1077,8 @@
     if (chips[1]) chips[1].textContent = endHex;
     const activeAccent = accent || currentAccentColor({ ...t, style: "color" }, progress);
     if (activeAccent){
-      preview.style.background = `linear-gradient(135deg, ${activeAccent.startCss} 0%, ${activeAccent.endCss} 100%)`;
-      preview.style.borderColor = rgbaString(activeAccent.rgb, activeAccent.isLight ? 0.28 : 0.32);
+      preview.style.background = gradientBackgroundForAccent(activeAccent);
+      preview.style.borderColor = rgbaString(activeAccent.rgb, activeAccent.isLight ? 0.28 : 0.36);
       preview.classList.toggle('light', activeAccent.isLight);
       preview.classList.toggle('dark', !activeAccent.isLight);
       preview.style.color = activeAccent.isLight ? '#05070b' : '#f7f8ff';
