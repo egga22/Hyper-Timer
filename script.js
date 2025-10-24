@@ -1048,7 +1048,7 @@
     
     try {
       const response = await fetch(`${RESTDB_URL}/${currentUser.id}`, {
-        method: 'PUT',
+        method: 'PATCH',
         headers: { 'x-apikey': API_KEY, 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
