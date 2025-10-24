@@ -162,6 +162,10 @@
       if (userRaw) {
         currentUser = JSON.parse(userRaw);
         if (currentUser) {
+          if (!currentUser.id && currentUser._id) {
+            currentUser.id = currentUser._id;
+          }
+          delete currentUser._id;
           const storedRole = currentUser.role ?? currentUser.Role;
           currentUser.role = normalizeRole(storedRole);
           delete currentUser.Role;
@@ -947,7 +951,7 @@
   }
   
   async function syncTimers() {
-      if (!currentUser || isSyncing) return;
+      if (!currentUser || !currentUser.id || isSyncing) return;
       isSyncing = true;
       if (settingsSyncBtn) {
         settingsSyncBtn.textContent = "Syncing...";
@@ -1027,7 +1031,10 @@
   }
 
   async function pushTimersToCloud(timersArray, timestampNumber) {
-    if (!currentUser) return;
+    if (!currentUser || !currentUser.id) {
+      console.warn("Skipping cloud push because the current user record is missing an id.");
+      return;
+    }
     
     const timestampValue = Number(timestampNumber);
     let safeTimestamp = Number.isFinite(timestampValue) ? timestampValue : null;
