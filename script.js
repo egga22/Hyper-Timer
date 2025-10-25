@@ -22,9 +22,43 @@
   }
 
   // --- START: Authentication and Sync Configuration ---
-  const RESTDB_URL = '/api/accounts'; // Requests proxied through Cloudflare Pages Function
+  function readMetaContent(name) {
+    if (typeof document === "undefined") return "";
+    const meta = document.querySelector(`meta[name="${name}"]`);
+    return meta && typeof meta.content === "string" ? meta.content : "";
+  }
+
+  function normalizeBaseUrl(base) {
+    if (!base) return "";
+    let normalized = typeof base === "string" ? base : String(base);
+    normalized = normalized.trim();
+    if (!normalized) return "";
+    return normalized.replace(/\/+$/, "");
+  }
+
+  function getConfiguredApiBase() {
+    if (typeof window === "undefined") return "";
+    const globalBase = window.HYPER_TIMER_API_BASE;
+    if (globalBase) {
+      return normalizeBaseUrl(globalBase);
+    }
+    const metaBase = readMetaContent("hyper-timer-api-base");
+    if (metaBase) {
+      return normalizeBaseUrl(metaBase);
+    }
+    return "";
+  }
+
+  function buildApiUrl(path) {
+    const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+    if (!API_BASE) return normalizedPath;
+    return `${API_BASE}${normalizedPath}`;
+  }
+
+  const API_BASE = getConfiguredApiBase();
+  const RESTDB_URL = buildApiUrl("/api/accounts"); // Requests proxied through Cloudflare Function
   const SYNC_UNAVAILABLE_ERROR = 'hyper-timer-sync-unavailable';
-  const SYNC_UNAVAILABLE_MESSAGE = "Cloud sync isn't available on this version of HyperTimer. Timers will continue to be saved locally on this device.";
+  const SYNC_UNAVAILABLE_MESSAGE = "Cloud sync isn't available right now. Timers will continue to be saved locally on this device.";
 
   let syncServiceAvailable = true;
   let hasAnnouncedSyncUnavailable = false;
@@ -106,6 +140,10 @@
   function markSyncServiceUnavailable() {
     if (!syncServiceAvailable) return;
     syncServiceAvailable = false;
+    disableSyncUiElements();
+  }
+
+  if (!syncServiceAvailable) {
     disableSyncUiElements();
   }
 
