@@ -22,8 +22,7 @@
   }
 
   // --- START: Authentication and Sync Configuration ---
-  const RESTDB_URL = 'https://timerapp-1f65.restdb.io/rest/accounts'; // <-- IMPORTANT: SET THIS
-  const API_KEY = '68a65f75b349a309704b6cab'; // <-- IMPORTANT: SET THIS
+  const RESTDB_URL = '/api/accounts'; // Requests proxied through Cloudflare Pages Function
   
   let currentUser = null;
   let isSyncing = false;
@@ -881,9 +880,7 @@
   }
 
   async function handleSignUp(email, password) {
-    const checkResponse = await fetch(`${RESTDB_URL}?q={"email":"${email}"}`, {
-        headers: { 'x-apikey': API_KEY }
-    });
+    const checkResponse = await fetch(`${RESTDB_URL}?q={"email":"${email}"}`);
     if (!checkResponse.ok) throw new Error("Network error checking user.");
     const existingUsers = await checkResponse.json();
     if (existingUsers.length > 0) {
@@ -901,7 +898,7 @@
     
     const createResponse = await fetch(RESTDB_URL, {
         method: 'POST',
-        headers: { 'x-apikey': API_KEY, 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newUser)
     });
 
@@ -915,9 +912,7 @@
   }
 
   async function handleLogin(email, password) {
-    const response = await fetch(`${RESTDB_URL}?q={"email":"${email}"}`, {
-        headers: { 'x-apikey': API_KEY, }
-    });
+    const response = await fetch(`${RESTDB_URL}?q={"email":"${email}"}`);
     if (!response.ok) throw new Error("Network error fetching user.");
     const users = await response.json();
 
@@ -959,9 +954,7 @@
       }
 
       try {
-        const response = await fetch(`${RESTDB_URL}/${currentUser.id}`, {
-            headers: { 'x-apikey': API_KEY, 'Content-Type': 'application/json' }
-        });
+        const response = await fetch(`${RESTDB_URL}/${currentUser.id}`);
         if (!response.ok) throw new Error("Could not fetch remote data.");
         
         const remoteUser = await response.json();
@@ -1056,7 +1049,7 @@
     try {
       const response = await fetch(`${RESTDB_URL}/${currentUser.id}`, {
         method: 'PATCH',
-        headers: { 'x-apikey': API_KEY, 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
       if (!response.ok) {
