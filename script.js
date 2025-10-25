@@ -23,6 +23,11 @@
 
   // --- START: Authentication and Sync Configuration ---
   const RESTDB_URL = '/api/accounts'; // Requests proxied through Cloudflare Pages Function
+  const SYNC_UNAVAILABLE_ERROR = 'hyper-timer-sync-unavailable';
+  const SYNC_UNAVAILABLE_MESSAGE = "Cloud sync isn't available on this version of HyperTimer. Timers will continue to be saved locally on this device.";
+
+  let syncServiceAvailable = true;
+  let hasAnnouncedSyncUnavailable = false;
   
   let currentUser = null;
   let isSyncing = false;
@@ -50,6 +55,80 @@
   const settingsRoleDisplay = $("#settingsRoleDisplay");
   const proAccessNotice = $("#proAccessNotice");
   const authDialog = $("#authDialog");
+
+  function notifySyncUnavailable() {
+    if (hasAnnouncedSyncUnavailable) return;
+    alert(SYNC_UNAVAILABLE_MESSAGE);
+    hasAnnouncedSyncUnavailable = true;
+  }
+
+  function disableSyncUiElements() {
+    if (settingsSignedOut) {
+      const infoNote = settingsSignedOut.querySelector('.note');
+      if (infoNote) {
+        infoNote.textContent = "Cloud sync is unavailable on this site. Timers will continue to save locally.";
+      }
+      if (settingsLoginBtn) {
+        settingsLoginBtn.disabled = true;
+        settingsLoginBtn.setAttribute('aria-disabled', 'true');
+      }
+      if (settingsSignupBtn) {
+        settingsSignupBtn.disabled = true;
+        settingsSignupBtn.setAttribute('aria-disabled', 'true');
+      }
+    }
+    if (settingsSignedIn) {
+      let existingNotice = settingsSignedIn.querySelector('[data-sync-unavailable]');
+      if (!existingNotice) {
+        existingNotice = document.createElement('div');
+        existingNotice.className = 'note';
+        existingNotice.dataset.syncUnavailable = 'true';
+        existingNotice.textContent = SYNC_UNAVAILABLE_MESSAGE;
+        settingsSignedIn.appendChild(existingNotice);
+      } else {
+        existingNotice.textContent = SYNC_UNAVAILABLE_MESSAGE;
+      }
+    }
+    if (settingsSyncBtn) {
+      settingsSyncBtn.textContent = 'Sync Unavailable';
+      settingsSyncBtn.disabled = true;
+      settingsSyncBtn.setAttribute('aria-disabled', 'true');
+    }
+    if (authDialog && typeof authDialog.close === 'function' && authDialog.open) {
+      try {
+        authDialog.close();
+      } catch (e) {
+        authDialog.removeAttribute('open');
+      }
+    }
+  }
+
+  function markSyncServiceUnavailable() {
+    if (!syncServiceAvailable) return;
+    syncServiceAvailable = false;
+    disableSyncUiElements();
+  }
+
+  function isApiUnavailableResponse(response) {
+    if (!response || response.status !== 404) return false;
+    const contentType = response.headers.get('content-type') || '';
+    return contentType.includes('text/html');
+  }
+
+  function createSyncUnavailableError() {
+    const error = new Error(SYNC_UNAVAILABLE_ERROR);
+    error.code = SYNC_UNAVAILABLE_ERROR;
+    return error;
+  }
+
+  async function safeApiFetch(url, options) {
+    const response = await fetch(url, options);
+    if (isApiUnavailableResponse(response)) {
+      markSyncServiceUnavailable();
+      throw createSyncUnavailableError();
+    }
+    return response;
+  }
 
   const f = {
     name: $("#f_name"), mode: $("#f_mode"), when: $("#f_when"),
@@ -178,7 +257,7 @@
       if (rt){ const data = JSON.parse(rt); if (Array.isArray(data)) templates = data.map(migrateTemplate); }
     } catch(e){ console.warn("load failed", e); }
     if (currentUser) {
-        syncTimers();
+        syncTimers({ silentIfUnavailable: true });
     }
     refreshSmartTimers();
   }
@@ -824,6 +903,10 @@
   }
 
   function openAuthDialog(isSignUpMode = false) {
+    if (!syncServiceAvailable) {
+      notifySyncUnavailable();
+      return;
+    }
     const dialog = $("#authDialog");
     const title = $("#authTitle");
     const submitBtn = $("#authSubmitBtn");
@@ -870,8 +953,12 @@
         await handleLogin(email, password);
       }
     } catch (error) {
-        console.error("Auth error:", error);
-        alert("An error occurred. Please try again.");
+        if (error && error.code === SYNC_UNAVAILABLE_ERROR) {
+          notifySyncUnavailable();
+        } else {
+          console.error("Auth error:", error);
+          alert("An error occurred. Please try again.");
+        }
     } finally {
         submitBtn.disabled = false;
         const currentModeIsSignUp = $("#authTitle").textContent === "Sign Up";
@@ -880,7 +967,7 @@
   }
 
   async function handleSignUp(email, password) {
-    const checkResponse = await fetch(`${RESTDB_URL}?q={"email":"${email}"}`);
+    const checkResponse = await safeApiFetch(`${RESTDB_URL}?q={"email":"${email}"}`);
     if (!checkResponse.ok) throw new Error("Network error checking user.");
     const existingUsers = await checkResponse.json();
     if (existingUsers.length > 0) {
@@ -896,7 +983,7 @@
         last_modified: new Date().toISOString() // Use DateTime type, send ISO string
     };
     
-    const createResponse = await fetch(RESTDB_URL, {
+    const createResponse = await safeApiFetch(RESTDB_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newUser)
@@ -912,7 +999,7 @@
   }
 
   async function handleLogin(email, password) {
-    const response = await fetch(`${RESTDB_URL}?q={"email":"${email}"}`);
+    const response = await safeApiFetch(`${RESTDB_URL}?q={"email":"${email}"}`);
     if (!response.ok) throw new Error("Network error fetching user.");
     const users = await response.json();
 
@@ -945,8 +1032,15 @@
     }
   }
   
-  async function syncTimers() {
+  async function syncTimers(options = {}) {
       if (!currentUser || !currentUser.id || isSyncing) return;
+      const { silentIfUnavailable = false } = options;
+      if (!syncServiceAvailable) {
+        if (!silentIfUnavailable) {
+          notifySyncUnavailable();
+        }
+        return;
+      }
       isSyncing = true;
       if (settingsSyncBtn) {
         settingsSyncBtn.textContent = "Syncing...";
@@ -954,9 +1048,9 @@
       }
 
       try {
-        const response = await fetch(`${RESTDB_URL}/${currentUser.id}`);
+        const response = await safeApiFetch(`${RESTDB_URL}/${currentUser.id}`);
         if (!response.ok) throw new Error("Could not fetch remote data.");
-        
+
         const remoteUser = await response.json();
         const remoteTimers = remoteUser.timers || [];
         const remoteRole = extractRoleFromRecord(remoteUser);
@@ -1010,15 +1104,32 @@
             console.log("Sync: Local and remote are up to date.");
         }
         await refreshSmartTimers();
-        alert('Sync complete!');
+        if (!silentIfUnavailable) {
+          alert('Sync complete!');
+        }
       } catch (error) {
-          console.error("Sync failed:", error);
-          alert("Sync failed. Please check your connection and try again.");
+          if (error && error.code === SYNC_UNAVAILABLE_ERROR) {
+            if (!silentIfUnavailable) {
+              notifySyncUnavailable();
+            }
+          } else {
+            console.error("Sync failed:", error);
+            if (!silentIfUnavailable) {
+              alert("Sync failed. Please check your connection and try again.");
+            }
+          }
       } finally {
           isSyncing = false;
           if (settingsSyncBtn) {
-            settingsSyncBtn.textContent = "Sync Now";
-            settingsSyncBtn.disabled = false;
+            if (syncServiceAvailable) {
+              settingsSyncBtn.textContent = "Sync Now";
+              settingsSyncBtn.disabled = false;
+              settingsSyncBtn.removeAttribute('aria-disabled');
+            } else {
+              settingsSyncBtn.textContent = 'Sync Unavailable';
+              settingsSyncBtn.disabled = true;
+              settingsSyncBtn.setAttribute('aria-disabled', 'true');
+            }
           }
       }
   }
@@ -1047,7 +1158,7 @@
     };
     
     try {
-      const response = await fetch(`${RESTDB_URL}/${currentUser.id}`, {
+      const response = await safeApiFetch(`${RESTDB_URL}/${currentUser.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -1057,7 +1168,11 @@
       }
       console.log("Successfully pushed changes to the cloud.");
     } catch (error) {
-      console.error("Failed to push changes to the cloud:", error);
+      if (error && error.code === SYNC_UNAVAILABLE_ERROR) {
+        console.warn("Skipping cloud sync push because the remote service is unavailable.");
+      } else {
+        console.error("Failed to push changes to the cloud:", error);
+      }
     }
   }
   // --- END: Authentication and Sync Functions ---
@@ -1725,15 +1840,23 @@
 
   if (settingsBtn) settingsBtn.addEventListener('click', () => openSettingsDialog());
   if (settingsLoginBtn) settingsLoginBtn.addEventListener('click', () => {
+    if (!syncServiceAvailable) {
+      notifySyncUnavailable();
+      return;
+    }
     closeSettingsDialog();
     openAuthDialog(false);
   });
   if (settingsSignupBtn) settingsSignupBtn.addEventListener('click', () => {
+    if (!syncServiceAvailable) {
+      notifySyncUnavailable();
+      return;
+    }
     closeSettingsDialog();
     openAuthDialog(true);
   });
   if (settingsLogoutBtn) settingsLogoutBtn.addEventListener('click', handleLogout);
-  if (settingsSyncBtn) settingsSyncBtn.addEventListener('click', syncTimers);
+  if (settingsSyncBtn) settingsSyncBtn.addEventListener('click', () => syncTimers());
   if (settingsDialog) settingsDialog.addEventListener('close', () => {
     if (settingsBtn) settingsBtn.setAttribute('aria-expanded', 'false');
   });
