@@ -1,13 +1,13 @@
 # Hyper Timer Deployment Guide
 
-This project expects to run on [Cloudflare Pages](https://developers.cloudflare.com/pages/) so it can use the bundled Pages Function in `functions/api/[[path]].js` as a proxy to the RestDB `accounts` API. If the site is hosted on a different platform (for example GitHub Pages), requests to `/api/accounts` will respond with `404 Not Found` because the Cloudflare runtime is not available. Follow the steps below to connect your deployment to your Cloudflare account and enable the sync features.
+Hyper Timer can be hosted from any static platform (GitHub Pages, Netlify, etc.) as long as the RestDB traffic is proxied through the Cloudflare Function in `functions/api/[[path]].js`. Follow the steps below to deploy the proxy, secure it, and point your static build at it so account syncing works even when the app itself is served from GitHub Pages.
 
 ## 1. Prepare your Cloudflare account
 
 1. Sign in to the Cloudflare dashboard and ensure you have the **Pages** product available on the account you plan to use.
 2. If you have not already, create a Cloudflare **API Token** with *Edit Cloudflare Workers* and *Edit Cloudflare Pages* permissions so you can deploy from GitHub (optional but recommended).
 
-## 2. Create a Pages project for Hyper Timer
+## 2. Create a Pages project for the proxy
 
 1. In the Cloudflare dashboard go to **Workers & Pages → Pages** and click **Create a project**.
 2. Choose **Connect to Git** and authorize Cloudflare to access the GitHub repository that contains this codebase.
@@ -17,26 +17,47 @@ This project expects to run on [Cloudflare Pages](https://developers.cloudflare.
    - **Build output directory:** `.`
 4. Toggle **Functions** on when prompted so that Cloudflare deploys the `functions/api/[[path]].js` handler.
 
-After the project is created, Cloudflare will deploy the site to a `*.pages.dev` URL. You can later add your custom domain in the Pages project settings.
+After the project is created, Cloudflare will deploy the proxy to a `*.pages.dev` URL. You can later add your custom domain in the Pages project settings if you prefer to mask the default domain.
 
-## 3. Configure the RestDB API key
+## 3. Configure the RestDB API key and allowed origins
 
 The proxy function forwards requests to `https://timerapp-1f65.restdb.io/rest/accounts` using an API key stored in the `API_KEY` environment variable.
 
 1. In the Pages project, open **Settings → Functions → Environment variables**.
 2. Add a variable named `API_KEY` and set its value to your RestDB API key.
-3. Re-deploy the project (trigger **Save and deploy** in the UI or push a new commit) so the function picks up the environment variable.
+3. (Recommended) Add another variable named `ALLOWED_ORIGINS` with a comma-separated list of domains that are allowed to call the proxy (for example `https://egga22.github.io`).
+4. Re-deploy the project (trigger **Save and deploy** in the UI or push a new commit) so the function picks up the environment variables.
 
 ## 4. Verify the proxy
 
 Once the deployment finishes:
 
-1. Visit `https://<your-pages-project>.pages.dev/api/accounts` in the browser (you should see JSON instead of a 404 page).
-2. Load the main application (`/Hyper-Timer/`) and open the developer tools network tab to confirm the calls to `/api/accounts` return `200` responses.
+1. Visit `https://<your-pages-project>.pages.dev/api/accounts` in the browser (you should see JSON instead of a 404 page). If you configured `ALLOWED_ORIGINS`, open DevTools → Network and repeat the request from one of the allowed origins to confirm you receive a `200` response.
+2. If you receive a `403 Origin not allowed` response, double-check the value of `ALLOWED_ORIGINS` and redeploy after updating it.
 
 If you see authentication errors (HTTP 401/403), double-check that the RestDB API key has read/write permissions for the `accounts` collection. If you still receive a `404`, make sure the request is being sent to your Cloudflare Pages domain and not to GitHub Pages.
 
-## 5. Optional: Using Wrangler for local testing
+## 5. Point your static site at the proxy
+
+The front-end code now looks for an override when building the proxy URL. Add **one** of the following before `script.js` is loaded on your static site:
+
+* **Meta tag (recommended for GitHub Pages):**
+
+  ```html
+  <meta name="hyper-timer-api-base" content="https://<your-pages-project>.pages.dev">
+  ```
+
+* **Global variable:**
+
+  ```html
+  <script>
+    window.HYPER_TIMER_API_BASE = "https://<your-pages-project>.pages.dev";
+  </script>
+  ```
+
+Once the meta tag or global is present, the app will send all `/api/accounts` requests to the Cloudflare proxy even though the main HTML is hosted from a static origin such as GitHub Pages.
+
+## 6. Optional: Using Wrangler for local testing
 
 If you want to test locally with the Cloudflare runtime:
 
