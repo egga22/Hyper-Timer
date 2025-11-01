@@ -67,6 +67,34 @@
   };
   const customFormatRow = $("#customFormatRow");
 
+  let proModeOptionTemplate = null;
+  let proModeOptionIndex = -1;
+  if (f.style) {
+    const existingProOption = f.style.querySelector('option[value="pro"]');
+    if (existingProOption) {
+      proModeOptionTemplate = existingProOption.cloneNode(true);
+      proModeOptionIndex = Array.from(f.style.options).indexOf(existingProOption);
+    }
+  }
+
+  function ensureProModeOptionPresent() {
+    if (!f.style || !proModeOptionTemplate) return null;
+    let option = f.style.querySelector('option[value="pro"]');
+    if (option) return option;
+    const newOption = proModeOptionTemplate.cloneNode(true);
+    const options = Array.from(f.style.options);
+    const insertionIndex = Math.min(
+      proModeOptionIndex < 0 ? options.length : proModeOptionIndex,
+      options.length
+    );
+    if (insertionIndex >= options.length) {
+      f.style.appendChild(newOption);
+    } else {
+      f.style.insertBefore(newOption, options[insertionIndex]);
+    }
+    return newOption;
+  }
+
   let lastStyleSelection = f.style ? f.style.value : "bar";
   if (f.style) {
     f.style.addEventListener("focus", () => {
@@ -141,31 +169,31 @@
 
   function enforceProModeEligibility(showNotice = false) {
     if (!f.style) return;
-    const proOption = f.style.querySelector('option[value="pro"]');
     const allowed = userCanUseProMode();
-    if (proOption) {
-      proOption.disabled = !allowed;
-      proOption.hidden = !allowed;
-      if (!allowed) {
-        proOption.setAttribute("aria-hidden", "true");
-      } else {
+    if (allowed) {
+      const proOption = ensureProModeOptionPresent();
+      if (proOption) {
+        proOption.disabled = false;
+        proOption.hidden = false;
         proOption.removeAttribute("aria-hidden");
       }
+      toggleProAccessNotice(false);
+      return;
     }
-    if (!allowed) {
-      if (f.style.value === "pro") {
-        const fallback = lastStyleSelection === "pro" ? "bar" : (lastStyleSelection || "bar");
-        f.style.value = fallback;
-        lastStyleSelection = f.style.value;
-        if (showNotice) {
-          toggleProAccessNotice(true);
-        } else {
-          toggleProAccessNotice(false);
-        }
-        updateStyleUI();
-      } else if (!showNotice) {
-        toggleProAccessNotice(false);
-      }
+
+    const proOption = f.style.querySelector('option[value="pro"]');
+    const wasSelected = f.style.value === "pro";
+    if (proOption) {
+      proOption.remove();
+    }
+    if (wasSelected) {
+      const fallback = lastStyleSelection === "pro" ? "bar" : (lastStyleSelection || "bar");
+      f.style.value = fallback;
+      lastStyleSelection = f.style.value;
+      updateStyleUI();
+    }
+    if (showNotice) {
+      toggleProAccessNotice(true);
     } else {
       toggleProAccessNotice(false);
     }
