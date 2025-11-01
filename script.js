@@ -7,6 +7,64 @@
   const pad3 = n => String(n).padStart(3, "0");
   const clamp = (v,a,b) => Math.min(b, Math.max(a, v));
   const uid = (p="id_") => p + Math.random().toString(36).slice(2);
+  function parseTimestamp(raw) {
+    if (raw == null) return 0;
+    if (typeof raw === "number") {
+      return Number.isFinite(raw) ? raw : 0;
+    }
+    if (typeof raw === "string") {
+      const numeric = Number(raw);
+      if (Number.isFinite(numeric)) return numeric;
+      const parsed = Date.parse(raw);
+      if (Number.isFinite(parsed)) return parsed;
+      try {
+        const maybeObject = JSON.parse(raw);
+        if (maybeObject && typeof maybeObject === "object") {
+          return parseTimestamp(maybeObject);
+        }
+      } catch (err) {
+        // Ignore JSON parse errors and continue with other strategies.
+      }
+      return 0;
+    }
+    if (Array.isArray(raw)) {
+      for (const entry of raw) {
+        const ts = parseTimestamp(entry);
+        if (ts) return ts;
+      }
+      return 0;
+    }
+    if (typeof raw === "object") {
+      if (Object.prototype.hasOwnProperty.call(raw, "$date")) {
+        return parseTimestamp(raw.$date);
+      }
+      if (Object.prototype.hasOwnProperty.call(raw, "$numberLong")) {
+        return parseTimestamp(raw.$numberLong);
+      }
+      if (typeof raw.valueOf === "function" && raw.valueOf !== Object.prototype.valueOf) {
+        const value = raw.valueOf();
+        if (value !== raw) {
+          const ts = parseTimestamp(value);
+          if (ts) return ts;
+        }
+      }
+    }
+    return 0;
+  }
+  function canonicalizeTimersForComparison(list) {
+    if (!Array.isArray(list)) return [];
+    return list
+      .map(item => {
+        if (!item || typeof item !== "object") return {};
+        const { _prevRem, _firedMap, _kMap, ...rest } = item;
+        return { ...rest };
+      })
+      .sort((a, b) => {
+        const idA = typeof a.id === "string" ? a.id : "";
+        const idB = typeof b.id === "string" ? b.id : "";
+        return idA.localeCompare(idB);
+      });
+  }
   function normalizeColorString(str, fallback="#6c7bff"){
     if (typeof str === "string"){
       const trimmed = str.trim();
@@ -1024,56 +1082,109 @@
         if (!response.ok) throw new Error("Could not fetch remote data.");
         
         const remoteUser = await response.json();
-        const remoteTimers = remoteUser.timers || [];
+        const remoteTimersRaw = Array.isArray(remoteUser.timers) ? remoteUser.timers : [];
+        const remoteTimers = remoteTimersRaw.map(migrateTimer);
         const remoteRole = extractRoleFromRecord(remoteUser);
         currentUser.role = remoteRole;
         localStorage.setItem(KEY_USER, JSON.stringify(currentUser));
         updateUIForLoginState();
-        // Normalize timestamps from both local storage and RestDB so comparisons behave predictably.
-        let remoteTimestamp = 0;
-        const remoteLastModified = remoteUser.last_modified;
-        if (typeof remoteLastModified === "number") {
-          if (Number.isFinite(remoteLastModified)) {
-            remoteTimestamp = remoteLastModified;
-          }
-        } else if (remoteLastModified) {
-          const parsedRemote = Date.parse(remoteLastModified);
-          if (Number.isFinite(parsedRemote)) {
-            remoteTimestamp = parsedRemote;
-          }
-        }
+        const remoteTimestamp = parseTimestamp(remoteUser.last_modified);
+        let localTimestamp = parseTimestamp(localStorage.getItem(KEY_LAST_MODIFIED));
 
-        const localTimestampRaw = localStorage.getItem(KEY_LAST_MODIFIED);
-        let localTimestamp = 0;
-        if (localTimestampRaw) {
-          const parsedLocal = Number(localTimestampRaw);
-          if (Number.isFinite(parsedLocal)) {
-            localTimestamp = parsedLocal;
-          } else {
-            const dateParsedLocal = Date.parse(localTimestampRaw);
-            if (Number.isFinite(dateParsedLocal)) {
-              localTimestamp = dateParsedLocal;
-            }
-          }
-        }
-        
         const localTimersExist = timers.length > 0;
-        const remoteTimersAreEmpty = !remoteTimers || remoteTimers.length === 0;
+        const remoteTimersExist = remoteTimers.length > 0;
+        const remoteTimestampMissing = remoteTimestamp === 0;
+        let localTimestampMissing = localTimestamp === 0;
 
-        if (localTimersExist && remoteTimersAreEmpty) {
+        const canonicalLocal = canonicalizeTimersForComparison(timers);
+        const canonicalRemote = canonicalizeTimersForComparison(remoteTimers);
+        const timersDiffer = JSON.stringify(canonicalLocal) !== JSON.stringify(canonicalRemote);
+
+        let shouldPushLocal = false;
+        let shouldPullRemote = false;
+        let pushTimestamp = null;
+        let pullTimestamp = null;
+
+        if (localTimersExist && !remoteTimersExist) {
             console.log("Sync: Local timers exist and remote is empty. Pushing local state.");
-            await pushTimersToCloud(timers, localTimestamp || Date.now());
+            shouldPushLocal = true;
+            if (!localTimestamp) {
+              localTimestamp = Date.now();
+              localTimestampMissing = false;
+              localStorage.setItem(KEY_LAST_MODIFIED, String(localTimestamp));
+            }
+            pushTimestamp = localTimestamp;
+        } else if (!localTimersExist && remoteTimersExist) {
+            console.log("Sync: Local is empty and remote has timers. Pulling remote state.");
+            shouldPullRemote = true;
+            pullTimestamp = remoteTimestamp || Date.now();
+            if (remoteTimestampMissing) {
+              shouldPushLocal = true;
+              pushTimestamp = pullTimestamp;
+            }
         } else if (remoteTimestamp > localTimestamp) {
             console.log("Sync: Remote is newer. Pulling remote state.");
-            timers = remoteTimers.map(migrateTimer);
-            localStorage.setItem(KEY_TIMERS, JSON.stringify(timers));
-            localStorage.setItem(KEY_LAST_MODIFIED, String(remoteTimestamp));
-            render();
+            shouldPullRemote = true;
+            pullTimestamp = remoteTimestamp;
         } else if (localTimestamp > remoteTimestamp) {
             console.log("Sync: Local is newer. Pushing local state.");
-            await pushTimersToCloud(timers, localTimestamp);
+            shouldPushLocal = true;
+            pushTimestamp = localTimestamp;
+        } else if (remoteTimestampMissing || localTimestampMissing) {
+            if (!timersDiffer) {
+              console.log("Sync: Timers match but timestamps are missing. Refreshing timestamp.");
+              shouldPushLocal = true;
+              pushTimestamp = Date.now();
+              localTimestamp = pushTimestamp;
+              localTimestampMissing = false;
+              localStorage.setItem(KEY_LAST_MODIFIED, String(localTimestamp));
+            } else if (!remoteTimersExist) {
+              console.log("Sync: Remote appears empty after comparison. Pushing local state.");
+              shouldPushLocal = true;
+              pushTimestamp = Date.now();
+              localTimestamp = pushTimestamp;
+              localTimestampMissing = false;
+              localStorage.setItem(KEY_LAST_MODIFIED, String(localTimestamp));
+            } else if (!localTimersExist) {
+              console.log("Sync: Local appears empty after comparison. Pulling remote state.");
+              shouldPullRemote = true;
+              pullTimestamp = Date.now();
+              shouldPushLocal = true;
+              pushTimestamp = pullTimestamp;
+            } else if (canonicalLocal.length >= canonicalRemote.length) {
+              console.log("Sync: Missing timestamps; preferring local timers.");
+              shouldPushLocal = true;
+              pushTimestamp = Date.now();
+              localTimestamp = pushTimestamp;
+              localTimestampMissing = false;
+              localStorage.setItem(KEY_LAST_MODIFIED, String(localTimestamp));
+            } else {
+              console.log("Sync: Missing timestamps; preferring remote timers.");
+              shouldPullRemote = true;
+              pullTimestamp = Date.now();
+              shouldPushLocal = true;
+              pushTimestamp = pullTimestamp;
+            }
         } else {
             console.log("Sync: Local and remote are up to date.");
+        }
+
+        if (shouldPullRemote) {
+            timers = remoteTimers;
+            const timestampToStore = pullTimestamp || remoteTimestamp || Date.now();
+            localStorage.setItem(KEY_TIMERS, JSON.stringify(timers));
+            localStorage.setItem(KEY_LAST_MODIFIED, String(timestampToStore));
+            localTimestamp = timestampToStore;
+            localTimestampMissing = false;
+            render();
+        }
+
+        if (shouldPushLocal) {
+            const timestampToPush = pushTimestamp || localTimestamp || Date.now();
+            localStorage.setItem(KEY_LAST_MODIFIED, String(timestampToPush));
+            localTimestamp = timestampToPush;
+            localTimestampMissing = false;
+            await pushTimersToCloud(timers, timestampToPush);
         }
         await refreshSmartTimers();
         alert('Sync complete!');
