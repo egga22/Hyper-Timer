@@ -221,6 +221,24 @@
           <button class="btn" type="button" id="settingsLogoutBtn">Log Out</button>
         </div>
         <div class="settings-role invisible" id="settingsRoleDisplay"></div>
+        <div class="settings-section invisible" id="settingsDefaultsSection">
+          <div class="settings-summary">
+            <div class="note">Default timer setup</div>
+            <div class="settings-value">Choose the defaults for new timers.</div>
+          </div>
+          <div class="field">
+            <label for="settingsDefaultStyle">Default animation</label>
+            <select id="settingsDefaultStyle"></select>
+          </div>
+          <div class="field">
+            <label for="settingsDefaultUnits">Default units display</label>
+            <select id="settingsDefaultUnits"></select>
+          </div>
+          <div class="settings-actions">
+            <button class="btn primary" type="button" id="settingsDefaultsSaveBtn">Save Defaults</button>
+          </div>
+          <div class="settings-status note" id="settingsDefaultsStatus" role="status" aria-live="polite"></div>
+        </div>
       </div>
     </div>
   </form>

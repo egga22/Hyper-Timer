@@ -109,6 +109,11 @@
   const settingsRoleDisplay = $("#settingsRoleDisplay");
   const proAccessNotice = $("#proAccessNotice");
   const authDialog = $("#authDialog");
+  const settingsDefaultsSection = $("#settingsDefaultsSection");
+  const settingsDefaultStyle = $("#settingsDefaultStyle");
+  const settingsDefaultUnits = $("#settingsDefaultUnits");
+  const settingsDefaultsSaveBtn = $("#settingsDefaultsSaveBtn");
+  const settingsDefaultsStatus = $("#settingsDefaultsStatus");
 
   function resetAuthDialogState() {
     const submitBtn = $("#authSubmitBtn");
@@ -215,6 +220,16 @@
     standard: ROLE_STANDARD
   };
   const PRO_MODE_ROLES = new Set(["beta tester", "special access", "owner"]);
+  const ADVANCED_SETTINGS_ROLES = new Set(["special access", "beta tester", "owner"]);
+  const DEFAULT_PREFERENCES = { defaultStyle: "bar", defaultUnits: "auto" };
+  const KEY_PREFERENCE_STORE = "hyperTimer_v7_prefStore";
+  const KNOWN_ANIMATION_STYLES = ["none", "bar", "ring", "pie", "multibar", "letters", "color", "pro"];
+  const KNOWN_UNIT_CHOICES = ["auto", "d", "dhm", "hms", "ms", "s", "custom"];
+  let userPreferences = { ...DEFAULT_PREFERENCES };
+  let cloudAccountMissing = false;
+  let lastPreferenceStatus = { message: "", tone: "neutral" };
+  let persistedPreferenceStatus = { message: "", tone: "neutral" };
+  let isUpdatingPreferenceUI = false;
 
   function normalizeRole(role) {
     if (typeof role === "string") {
@@ -245,6 +260,269 @@
   function toggleProAccessNotice(show) {
     if (!proAccessNotice) return;
     proAccessNotice.classList.toggle("invisible", !show);
+  }
+
+  function userCanAccessDefaultSettings() {
+    return ADVANCED_SETTINGS_ROLES.has(getCurrentRole().toLowerCase());
+  }
+
+  function sanitizeStylePreference(style) {
+    if (typeof style === "string") {
+      const normalized = style.trim().toLowerCase();
+      const match = KNOWN_ANIMATION_STYLES.find(opt => opt.toLowerCase() === normalized);
+      if (match) return match;
+    }
+    return DEFAULT_PREFERENCES.defaultStyle;
+  }
+
+  function sanitizeUnitsPreference(units) {
+    if (typeof units === "string") {
+      const normalized = units.trim().toLowerCase();
+      const match = KNOWN_UNIT_CHOICES.find(opt => opt.toLowerCase() === normalized);
+      if (match) return match;
+    }
+    return DEFAULT_PREFERENCES.defaultUnits;
+  }
+
+  function sanitizePreferences(prefs) {
+    const base = prefs && typeof prefs === "object" ? prefs : {};
+    return {
+      defaultStyle: sanitizeStylePreference(base.defaultStyle),
+      defaultUnits: sanitizeUnitsPreference(base.defaultUnits)
+    };
+  }
+
+  function getPreferenceKeyForUser(user = currentUser) {
+    if (user && typeof user === "object") {
+      if (user.id) return `id:${user.id}`;
+      if (user.email) return `email:${String(user.email).toLowerCase()}`;
+    }
+    return "local";
+  }
+
+  function readPreferenceStore() {
+    try {
+      const raw = localStorage.getItem(KEY_PREFERENCE_STORE);
+      if (!raw) return {};
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === "object") return parsed;
+    } catch (err) {
+      console.warn("Failed to parse preference store", err);
+    }
+    return {};
+  }
+
+  function writePreferenceStore(store) {
+    try {
+      localStorage.setItem(KEY_PREFERENCE_STORE, JSON.stringify(store));
+    } catch (err) {
+      console.warn("Failed to persist preference store", err);
+    }
+  }
+
+  function loadPreferencesForKey(key) {
+    const store = readPreferenceStore();
+    const entry = store && typeof store === "object" ? store[key] : null;
+    if (entry && typeof entry === "object") {
+      return sanitizePreferences(entry);
+    }
+    return { ...DEFAULT_PREFERENCES };
+  }
+
+  function savePreferencesForKey(key, prefs) {
+    const store = readPreferenceStore();
+    store[key] = sanitizePreferences(prefs);
+    writePreferenceStore(store);
+  }
+
+  function loadPreferencesForCurrentUser() {
+    return loadPreferencesForKey(getPreferenceKeyForUser(currentUser));
+  }
+
+  function savePreferencesForCurrentUser(prefs = userPreferences) {
+    savePreferencesForKey(getPreferenceKeyForUser(currentUser), prefs);
+  }
+
+  function renderPreferencesStatus() {
+    if (!settingsDefaultsStatus) return;
+    const { message, tone } = lastPreferenceStatus;
+    settingsDefaultsStatus.textContent = message || "";
+    settingsDefaultsStatus.classList.remove("success", "error", "warning");
+    if (tone === "success" || tone === "error" || tone === "warning") {
+      settingsDefaultsStatus.classList.add(tone);
+    }
+  }
+
+  function setPreferencesStatus(message, tone = "neutral", { persist = false } = {}) {
+    lastPreferenceStatus = { message, tone };
+    if (persist) {
+      persistedPreferenceStatus = { message, tone };
+    }
+    renderPreferencesStatus();
+  }
+
+  function restorePersistedPreferenceStatus() {
+    lastPreferenceStatus = { ...persistedPreferenceStatus };
+    renderPreferencesStatus();
+  }
+
+  function applyPreferencesToState(prefs, { save = true } = {}) {
+    userPreferences = sanitizePreferences(prefs);
+    if (save) {
+      savePreferencesForCurrentUser(userPreferences);
+    }
+    updateDefaultSettingsSection();
+  }
+
+  function gatherSelectOptions(selectEl) {
+    if (!selectEl) return [];
+    const seen = new Set();
+    return Array.from(selectEl.options || []).reduce((acc, option) => {
+      const value = option.value;
+      if (!value || seen.has(value)) return acc;
+      seen.add(value);
+      acc.push({ value, label: option.textContent || value });
+      return acc;
+    }, []);
+  }
+
+  function populateDefaultSettingsOptions() {
+    if (settingsDefaultStyle && f.style) {
+      const styleOptions = gatherSelectOptions(f.style);
+      const prev = settingsDefaultStyle.value;
+      settingsDefaultStyle.innerHTML = "";
+      styleOptions.forEach(opt => {
+        const optionEl = document.createElement("option");
+        optionEl.value = opt.value;
+        optionEl.textContent = opt.label;
+        settingsDefaultStyle.appendChild(optionEl);
+      });
+      if (prev && settingsDefaultStyle.querySelector(`option[value="${prev}"]`)) {
+        settingsDefaultStyle.value = prev;
+      }
+    }
+    if (settingsDefaultUnits && f.units) {
+      const unitOptions = gatherSelectOptions(f.units);
+      const prev = settingsDefaultUnits.value;
+      settingsDefaultUnits.innerHTML = "";
+      unitOptions.forEach(opt => {
+        const optionEl = document.createElement("option");
+        optionEl.value = opt.value;
+        optionEl.textContent = opt.label;
+        settingsDefaultUnits.appendChild(optionEl);
+      });
+      if (prev && settingsDefaultUnits.querySelector(`option[value="${prev}"]`)) {
+        settingsDefaultUnits.value = prev;
+      }
+    }
+  }
+
+  function applyPreferenceSelections() {
+    if (!settingsDefaultStyle || !settingsDefaultUnits) return;
+    isUpdatingPreferenceUI = true;
+    const sanitizedStyle = sanitizeStylePreference(userPreferences.defaultStyle);
+    const sanitizedUnits = sanitizeUnitsPreference(userPreferences.defaultUnits);
+    const styleValue = sanitizedStyle === "pro" && !userCanUseProMode()
+      ? DEFAULT_PREFERENCES.defaultStyle
+      : sanitizedStyle;
+    if (settingsDefaultStyle.querySelector(`option[value="${styleValue}"]`)) {
+      settingsDefaultStyle.value = styleValue;
+    } else if (settingsDefaultStyle.options.length) {
+      settingsDefaultStyle.selectedIndex = 0;
+    }
+    if (settingsDefaultUnits.querySelector(`option[value="${sanitizedUnits}"]`)) {
+      settingsDefaultUnits.value = sanitizedUnits;
+    } else if (settingsDefaultUnits.options.length) {
+      settingsDefaultUnits.selectedIndex = 0;
+    }
+    isUpdatingPreferenceUI = false;
+  }
+
+  function updateDefaultSettingsSection() {
+    if (!settingsDefaultsSection) return;
+    const shouldShow = !!currentUser && userCanAccessDefaultSettings();
+    settingsDefaultsSection.classList.toggle("invisible", !shouldShow);
+    if (!shouldShow) {
+      return;
+    }
+    populateDefaultSettingsOptions();
+    applyPreferenceSelections();
+    renderPreferencesStatus();
+  }
+
+  function handlePreferenceFieldChange() {
+    if (isUpdatingPreferenceUI) return;
+    if (!settingsDefaultStyle || !settingsDefaultUnits) return;
+    const pending = sanitizePreferences({
+      defaultStyle: settingsDefaultStyle.value,
+      defaultUnits: settingsDefaultUnits.value
+    });
+    if (
+      pending.defaultStyle === userPreferences.defaultStyle &&
+      pending.defaultUnits === userPreferences.defaultUnits
+    ) {
+      restorePersistedPreferenceStatus();
+    } else {
+      setPreferencesStatus("Unsaved changes — click Save Defaults.", "warning");
+    }
+  }
+
+  async function handlePreferencesSave() {
+    if (!settingsDefaultStyle || !settingsDefaultUnits) return;
+    if (!currentUser || !userCanAccessDefaultSettings()) {
+      setPreferencesStatus("Only beta testers, special access, or the owner can change defaults.", "error");
+      return;
+    }
+
+    const pending = sanitizePreferences({
+      defaultStyle: settingsDefaultStyle.value,
+      defaultUnits: settingsDefaultUnits.value
+    });
+    const adjusted = { ...pending };
+    if (adjusted.defaultStyle === "pro" && !userCanUseProMode()) {
+      adjusted.defaultStyle = DEFAULT_PREFERENCES.defaultStyle;
+    }
+
+    const unchanged = adjusted.defaultStyle === userPreferences.defaultStyle &&
+      adjusted.defaultUnits === userPreferences.defaultUnits;
+    if (unchanged) {
+      setPreferencesStatus("Defaults unchanged.", "neutral", { persist: true });
+      return;
+    }
+
+    applyPreferencesToState(adjusted, { save: true });
+    if (settingsDefaultsSaveBtn) settingsDefaultsSaveBtn.disabled = true;
+    setPreferencesStatus("Saving defaults...", "warning");
+
+    try {
+      const pushed = await pushPreferencesToCloud();
+      if (pushed) {
+        setPreferencesStatus("Defaults saved to your account.", "success", { persist: true });
+      } else {
+        setPreferencesStatus("Defaults saved locally. We'll sync them when you're online.", "warning", { persist: true });
+      }
+    } catch (error) {
+      if (error.message === "account-not-found") {
+        setPreferencesStatus("Cloud account missing. Defaults saved locally only.", "error", { persist: true });
+      } else {
+        console.error("Failed to save preferences to the cloud:", error);
+        setPreferencesStatus("Defaults saved locally. Cloud sync failed.", "error");
+      }
+    } finally {
+      if (settingsDefaultsSaveBtn) settingsDefaultsSaveBtn.disabled = false;
+    }
+  }
+
+  function getDefaultTimerStyle() {
+    const sanitized = sanitizeStylePreference(userPreferences.defaultStyle);
+    if (sanitized === "pro" && !userCanUseProMode()) {
+      return DEFAULT_PREFERENCES.defaultStyle;
+    }
+    return sanitized;
+  }
+
+  function getDefaultTimerUnits() {
+    return sanitizeUnitsPreference(userPreferences.defaultUnits);
   }
 
   function enforceProModeEligibility(showNotice = false) {
@@ -298,6 +576,7 @@
   }
   
   function load(){
+    cloudAccountMissing = false;
     try {
       const userRaw = localStorage.getItem(KEY_USER);
       if (userRaw) {
@@ -312,13 +591,17 @@
           delete currentUser.Role;
           localStorage.setItem(KEY_USER, JSON.stringify(currentUser));
         }
-        updateUIForLoginState();
       }
       const raw = localStorage.getItem(KEY_TIMERS);
       if (raw){ const data = JSON.parse(raw); if (Array.isArray(data)) timers = data.map(migrateTimer); }
       const rt = localStorage.getItem(TPL);
       if (rt){ const data = JSON.parse(rt); if (Array.isArray(data)) templates = data.map(migrateTemplate); }
     } catch(e){ console.warn("load failed", e); }
+    applyPreferencesToState(loadPreferencesForCurrentUser(), { save: false });
+    persistedPreferenceStatus = { message: "", tone: "neutral" };
+    lastPreferenceStatus = { message: "", tone: "neutral" };
+    renderPreferencesStatus();
+    updateUIForLoginState();
     if (currentUser) {
         syncTimers();
     }
@@ -845,10 +1128,12 @@
   function openEditor(id=null, template=null){
     $("#dialogTitle").textContent = id ? "Edit Timer" : (template ? "New from Template" : "New Timer");
     editId = id;
+    const draftStyle = template?.style || getDefaultTimerStyle();
+    const draftUnits = template?.units || getDefaultTimerUnits();
     const draft = id ? timers.find(x=>x.id===id) : {
-      id: uid("t_"), name:"", mode:"duration", style: template?.style || "bar", color: template?.color || "#6c7bff",
+      id: uid("t_"), name:"", mode:"duration", style: draftStyle, color: template?.color || "#6c7bff",
       color2: template?.color2 || template?.color || "#6c7bff",
-      units: template?.units || "auto", format: template?.format || "{HH}:{mm}:{ss}",
+      units: draftUnits, format: template?.format || "{HH}:{mm}:{ss}",
       ring_thickness: template?.ring_thickness ?? 10, ease: template?.ease || "linear", tick: template?.tick ?? 100, ms: template?.ms || "off",
       dotsCount: template?.dotsCount ?? 60, mb_bars: template?.mb_bars ?? null, mb_ticks: template?.mb_ticks ?? null, letters_n: template?.letters_n ?? null,
       triggers: template?.triggers || [], doneSoundDataUrl: template?.doneSoundDataUrl || null, doneTts: template?.doneTts || "", prestigeLevel:0,
@@ -941,6 +1226,7 @@
     }
     toggleProAccessNotice(false);
     enforceProModeEligibility(false);
+    updateDefaultSettingsSection();
   }
 
   function openSettingsDialog() {
@@ -1042,7 +1328,8 @@
         password,
         Role: ROLE_STANDARD,
         timers: [], // Use JSON type, send empty array
-        last_modified: new Date().toISOString() // Use DateTime type, send ISO string
+        last_modified: new Date().toISOString(), // Use DateTime type, send ISO string
+        preferences: { ...DEFAULT_PREFERENCES }
     };
     
     const createResponse = await fetch(RESTDB_URL, {
@@ -1079,7 +1366,12 @@
     }
 
     currentUser = { id: user._id, email: user.email, role: extractRoleFromRecord(user) };
+    cloudAccountMissing = false;
     localStorage.setItem(KEY_USER, JSON.stringify(currentUser));
+    persistedPreferenceStatus = { message: "", tone: "neutral" };
+    lastPreferenceStatus = { message: "", tone: "neutral" };
+    applyPreferencesToState(loadPreferencesForCurrentUser(), { save: false });
+    renderPreferencesStatus();
     updateUIForLoginState();
     closeAuthDialog();
 
@@ -1090,7 +1382,12 @@
     if (confirm("Are you sure you want to log out? Your timers will remain on this device but will no longer sync.")) {
       closeSettingsDialog();
       currentUser = null;
+      cloudAccountMissing = false;
       localStorage.removeItem(KEY_USER);
+      persistedPreferenceStatus = { message: "", tone: "neutral" };
+      lastPreferenceStatus = { message: "", tone: "neutral" };
+      applyPreferencesToState(loadPreferencesForCurrentUser(), { save: false });
+      renderPreferencesStatus();
       updateUIForLoginState();
       render();
     }
@@ -1099,6 +1396,10 @@
   async function syncTimers() {
       if (!currentUser || !currentUser.id || isSyncing) return;
       isSyncing = true;
+      cloudAccountMissing = false;
+      const localStoredPreferences = sanitizePreferences(loadPreferencesForCurrentUser());
+      let shouldRestorePreferences = false;
+      let preferencesPushedViaTimers = false;
       if (settingsSyncBtn) {
         settingsSyncBtn.textContent = "Syncing...";
         settingsSyncBtn.disabled = true;
@@ -1108,8 +1409,17 @@
         const response = await fetch(`${RESTDB_URL}/${currentUser.id}`, {
             headers: { 'x-apikey': API_KEY }
         });
+        if (response.status === 404) {
+          cloudAccountMissing = true;
+          applyPreferencesToState(localStoredPreferences, { save: false });
+          if (userCanAccessDefaultSettings()) {
+            setPreferencesStatus("Cloud account not found. Defaults will stay local.", "error", { persist: true });
+          }
+          alert('Cloud account not found. Your timers and defaults will stay local until it is restored.');
+          return;
+        }
         if (!response.ok) throw new Error("Could not fetch remote data.");
-        
+
         const remoteUser = await response.json();
         const remoteTimersRaw = Array.isArray(remoteUser.timers) ? remoteUser.timers : [];
         const remoteTimers = remoteTimersRaw.map(migrateTimer);
@@ -1117,6 +1427,29 @@
         currentUser.role = remoteRole;
         localStorage.setItem(KEY_USER, JSON.stringify(currentUser));
         updateUIForLoginState();
+
+        const remotePreferencesRaw = remoteUser && typeof remoteUser === "object" ? remoteUser.preferences : null;
+        const sanitizedRemotePreferences = remotePreferencesRaw && typeof remotePreferencesRaw === "object"
+          ? sanitizePreferences(remotePreferencesRaw)
+          : null;
+
+        if (sanitizedRemotePreferences) {
+          applyPreferencesToState(sanitizedRemotePreferences, { save: true });
+          if (userCanAccessDefaultSettings()) {
+            setPreferencesStatus("Defaults synced from cloud.", "success", { persist: true });
+          } else {
+            persistedPreferenceStatus = { message: "", tone: "neutral" };
+            lastPreferenceStatus = { message: "", tone: "neutral" };
+            renderPreferencesStatus();
+          }
+        } else {
+          applyPreferencesToState(localStoredPreferences, { save: true });
+          shouldRestorePreferences = true;
+          if (userCanAccessDefaultSettings()) {
+            setPreferencesStatus("Cloud defaults missing — using local backup.", "warning", { persist: true });
+          }
+        }
+
         const remoteTimestamp = parseTimestamp(remoteUser.last_modified);
         let localTimestamp = parseTimestamp(localStorage.getItem(KEY_LAST_MODIFIED));
 
@@ -1213,9 +1546,37 @@
             localStorage.setItem(KEY_LAST_MODIFIED, String(timestampToPush));
             localTimestamp = timestampToPush;
             localTimestampMissing = false;
-            await pushTimersToCloud(timers, timestampToPush);
+            const pushSucceeded = await pushTimersToCloud(timers, timestampToPush);
+            if (pushSucceeded) {
+              preferencesPushedViaTimers = true;
+            }
         }
         await refreshSmartTimers();
+
+        if (shouldRestorePreferences) {
+          if (!preferencesPushedViaTimers) {
+            try {
+              const pushed = await pushPreferencesToCloud();
+              if (pushed && userCanAccessDefaultSettings()) {
+                setPreferencesStatus("Cloud defaults restored from local backup.", "success", { persist: true });
+              }
+            } catch (prefError) {
+              if (prefError.message === "account-not-found") {
+                if (userCanAccessDefaultSettings()) {
+                  setPreferencesStatus("Cloud account missing. Defaults saved locally only.", "error", { persist: true });
+                }
+              } else {
+                console.error("Failed to sync preferences to the cloud:", prefError);
+                if (userCanAccessDefaultSettings()) {
+                  setPreferencesStatus("Defaults saved locally. Cloud sync failed.", "error");
+                }
+              }
+            }
+          } else if (userCanAccessDefaultSettings()) {
+            setPreferencesStatus("Cloud defaults restored from local backup.", "success", { persist: true });
+          }
+        }
+
         alert('Sync complete!');
       } catch (error) {
           console.error("Sync failed:", error);
@@ -1229,12 +1590,34 @@
       }
   }
 
+  async function patchAccount(partialPayload) {
+    if (!currentUser || !currentUser.id) {
+      throw new Error("no-current-user");
+    }
+    if (cloudAccountMissing) {
+      throw new Error("account-not-found");
+    }
+    const response = await fetch(`${RESTDB_URL}/${currentUser.id}`, {
+      method: 'PATCH',
+      headers: { 'x-apikey': API_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify(partialPayload)
+    });
+    if (response.status === 404) {
+      cloudAccountMissing = true;
+      throw new Error("account-not-found");
+    }
+    if (!response.ok) {
+      throw new Error(`Server responded with ${response.status}`);
+    }
+    return response;
+  }
+
   async function pushTimersToCloud(timersArray, timestampNumber) {
     if (!currentUser || !currentUser.id) {
       console.warn("Skipping cloud push because the current user record is missing an id.");
       return;
     }
-    
+
     const timestampValue = Number(timestampNumber);
     let safeTimestamp = Number.isFinite(timestampValue) ? timestampValue : null;
     if (safeTimestamp === null && timestampNumber) {
@@ -1249,21 +1632,43 @@
 
     const payload = {
       timers: timersArray,
-      last_modified: new Date(safeTimestamp).toISOString() // Convert timestamp number to ISO string for RestDB
+      last_modified: new Date(safeTimestamp).toISOString(),
+      preferences: sanitizePreferences(userPreferences)
     };
-    
+
     try {
-      const response = await fetch(`${RESTDB_URL}/${currentUser.id}`, {
-        method: 'PATCH',
-        headers: { 'x-apikey': API_KEY, 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      if (!response.ok) {
-        throw new Error(`Server responded with ${response.status}`);
-      }
+      await patchAccount(payload);
       console.log("Successfully pushed changes to the cloud.");
+      return true;
     } catch (error) {
+      if (error.message === "no-current-user") {
+        console.warn("Skipping cloud push because no authenticated user is available.");
+        return false;
+      }
+      if (error.message === "account-not-found") {
+        console.warn("Skipping cloud push because the remote account record is missing.");
+        if (userCanAccessDefaultSettings()) {
+          setPreferencesStatus("Cloud account missing. Defaults saved locally only.", "error", { persist: true });
+        }
+        return false;
+      }
       console.error("Failed to push changes to the cloud:", error);
+    }
+    return false;
+  }
+
+  async function pushPreferencesToCloud() {
+    if (!currentUser || !currentUser.id) {
+      return false;
+    }
+    try {
+      await patchAccount({ preferences: sanitizePreferences(userPreferences) });
+      return true;
+    } catch (error) {
+      if (error.message === "no-current-user") {
+        return false;
+      }
+      throw error;
     }
   }
   // --- END: Authentication and Sync Functions ---
@@ -1930,6 +2335,11 @@
   });
 
   if (settingsBtn) settingsBtn.addEventListener('click', () => openSettingsDialog());
+  if (settingsDefaultStyle) settingsDefaultStyle.addEventListener('change', handlePreferenceFieldChange);
+  if (settingsDefaultUnits) settingsDefaultUnits.addEventListener('change', handlePreferenceFieldChange);
+  if (settingsDefaultsSaveBtn) settingsDefaultsSaveBtn.addEventListener('click', async () => {
+    await handlePreferencesSave();
+  });
   if (settingsLoginBtn) settingsLoginBtn.addEventListener('click', () => {
     closeSettingsDialog();
     openAuthDialog(false);
