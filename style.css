@@ -38,6 +38,10 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
 .settings-summary{display:grid; gap:4px;}
 .settings-value{font-weight:700;}
 .settings-role{margin-top:auto; font-size:.9rem; color:var(--muted); border-top:1px solid rgba(255,255,255,.08); padding-top:12px;}
+.settings-status{font-size:.85rem; color:var(--muted);}
+.settings-status.success{color:#7ef7b2;}
+.settings-status.error{color:#ff8ba0;}
+.settings-status.warning{color:#f7d27f;}
 .field{display:grid; gap:6px; min-width:0}
 .field-row{display:grid; grid-template-columns:1fr 1fr; gap:10px}
 .note{font-size:.85rem; color:var(--muted)}
