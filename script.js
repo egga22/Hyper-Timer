@@ -1019,7 +1019,7 @@
 
       try {
         const response = await fetch(`${RESTDB_URL}/${currentUser.id}`, {
-            headers: { 'x-apikey': API_KEY, 'Content-Type': 'application/json' }
+            headers: { 'x-apikey': API_KEY }
         });
         if (!response.ok) throw new Error("Could not fetch remote data.");
         
