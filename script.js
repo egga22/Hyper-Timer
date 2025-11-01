@@ -110,6 +110,29 @@
   const proAccessNotice = $("#proAccessNotice");
   const authDialog = $("#authDialog");
 
+  function resetAuthDialogState() {
+    const submitBtn = $("#authSubmitBtn");
+    if (!submitBtn) return;
+    submitBtn.disabled = false;
+    const title = $("#authTitle");
+    const currentModeIsSignUp = title && title.textContent === "Sign Up";
+    submitBtn.textContent = currentModeIsSignUp ? "Create Account" : "Log In";
+  }
+
+  function closeAuthDialog() {
+    if (!authDialog) return;
+    if (typeof authDialog.close === "function") {
+      try {
+        authDialog.close();
+        return;
+      } catch (err) {
+        // Fall through to the attribute removal fallback below.
+      }
+    }
+    authDialog.removeAttribute("open");
+    authDialog.dispatchEvent(new Event("close"));
+  }
+
   const f = {
     name: $("#f_name"), mode: $("#f_mode"), when: $("#f_when"),
     days: $("#f_days"), hours: $("#f_hours"), minutes: $("#f_minutes"), seconds: $("#f_seconds"),
@@ -942,28 +965,34 @@
   }
 
   function openAuthDialog(isSignUpMode = false) {
-    const dialog = $("#authDialog");
+    if (!authDialog) return;
     const title = $("#authTitle");
     const submitBtn = $("#authSubmitBtn");
     const switchLink = $("#authModeSwitch");
-    
+
+    if (submitBtn) submitBtn.disabled = false;
+
     $("#auth_email").value = '';
     $("#auth_password").value = '';
 
     if (isSignUpMode) {
-      title.textContent = "Sign Up";
-      submitBtn.textContent = "Create Account";
-      switchLink.textContent = "Already have an account? Log In";
+      if (title) title.textContent = "Sign Up";
+      if (submitBtn) submitBtn.textContent = "Create Account";
+      if (switchLink) switchLink.textContent = "Already have an account? Log In";
     } else {
-      title.textContent = "Log In";
-      submitBtn.textContent = "Log In";
-      switchLink.textContent = "Need an account? Sign Up";
+      if (title) title.textContent = "Log In";
+      if (submitBtn) submitBtn.textContent = "Log In";
+      if (switchLink) switchLink.textContent = "Need an account? Sign Up";
     }
     // Gracefully handle browsers that do not support <dialog>.showModal()
     try {
-      dialog.showModal ? dialog.showModal() : dialog.setAttribute("open", "");
+      if (typeof authDialog.showModal === "function") {
+        authDialog.showModal();
+      } else {
+        authDialog.setAttribute("open", "");
+      }
     } catch (e) {
-      dialog.setAttribute("open", "");
+      authDialog.setAttribute("open", "");
     }
   }
   
@@ -1024,7 +1053,7 @@
 
     if (createResponse.ok) {
         alert("Account created successfully! Please log in.");
-        authDialog.close();
+        closeAuthDialog();
         openAuthDialog(false);
     } else {
         alert("Failed to create account. Server returned an error.");
@@ -1052,7 +1081,7 @@
     currentUser = { id: user._id, email: user.email, role: extractRoleFromRecord(user) };
     localStorage.setItem(KEY_USER, JSON.stringify(currentUser));
     updateUIForLoginState();
-    authDialog.close();
+    closeAuthDialog();
 
     await syncTimers();
   }
@@ -1922,12 +1951,7 @@
     openAuthDialog(isSignUp);
   });
   $("#authSubmitBtn").addEventListener('click', handleAuthSubmit);
-  authDialog.addEventListener('close', () => {
-    const submitBtn = $("#authSubmitBtn");
-    submitBtn.disabled = false;
-    const currentModeIsSignUp = $("#authTitle").textContent === "Sign Up";
-    submitBtn.textContent = currentModeIsSignUp ? "Create Account" : "Log In";
-  });
+  if (authDialog) authDialog.addEventListener('close', resetAuthDialogState);
 
   updateUIForLoginState();
   load();
