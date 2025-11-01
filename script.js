@@ -74,17 +74,14 @@
     });
     f.style.addEventListener("change", () => {
       if (f.style.value === "pro" && !userCanUseProMode()) {
-        const fallback = lastStyleSelection === "pro" ? "bar" : (lastStyleSelection || "bar");
-        f.style.value = fallback;
-        lastStyleSelection = f.style.value;
-        toggleProAccessNotice(true);
-        updateStyleUI();
+        enforceProModeEligibility(true);
         return;
       }
       lastStyleSelection = f.style.value;
       toggleProAccessNotice(false);
       updateStyleUI();
     });
+    enforceProModeEligibility(false);
   }
   toggleProAccessNotice(false);
 
@@ -140,6 +137,38 @@
   function toggleProAccessNotice(show) {
     if (!proAccessNotice) return;
     proAccessNotice.classList.toggle("invisible", !show);
+  }
+
+  function enforceProModeEligibility(showNotice = false) {
+    if (!f.style) return;
+    const proOption = f.style.querySelector('option[value="pro"]');
+    const allowed = userCanUseProMode();
+    if (proOption) {
+      proOption.disabled = !allowed;
+      proOption.hidden = !allowed;
+      if (!allowed) {
+        proOption.setAttribute("aria-hidden", "true");
+      } else {
+        proOption.removeAttribute("aria-hidden");
+      }
+    }
+    if (!allowed) {
+      if (f.style.value === "pro") {
+        const fallback = lastStyleSelection === "pro" ? "bar" : (lastStyleSelection || "bar");
+        f.style.value = fallback;
+        lastStyleSelection = f.style.value;
+        if (showNotice) {
+          toggleProAccessNotice(true);
+        } else {
+          toggleProAccessNotice(false);
+        }
+        updateStyleUI();
+      } else if (!showNotice) {
+        toggleProAccessNotice(false);
+      }
+    } else {
+      toggleProAccessNotice(false);
+    }
   }
 
   async function updateAndSaveTimers(newTimersArray = null) {
@@ -722,11 +751,9 @@
     if (f.style) {
       lastStyleSelection = f.style.value;
       if (!userCanUseProMode() && f.style.value === "pro") {
-        toggleProAccessNotice(true);
-        f.style.value = "bar";
-        lastStyleSelection = f.style.value;
+        enforceProModeEligibility(true);
       } else {
-        toggleProAccessNotice(false);
+        enforceProModeEligibility(false);
       }
     }
     if (f.smartMethod) f.smartMethod.value = draft.smartMethod || "manifold";
@@ -801,6 +828,7 @@
       settingsBtn.dataset.role = role;
     }
     toggleProAccessNotice(false);
+    enforceProModeEligibility(false);
   }
 
   function openSettingsDialog() {
