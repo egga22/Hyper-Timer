@@ -1323,13 +1323,15 @@
         return;
     }
 
+    const initialSettings = sanitizePreferences(DEFAULT_PREFERENCES);
     const newUser = {
         email,
         password,
         Role: ROLE_STANDARD,
         timers: [], // Use JSON type, send empty array
         last_modified: new Date().toISOString(), // Use DateTime type, send ISO string
-        preferences: { ...DEFAULT_PREFERENCES }
+        Settings: initialSettings,
+        preferences: initialSettings
     };
     
     const createResponse = await fetch(RESTDB_URL, {
@@ -1428,7 +1430,9 @@
         localStorage.setItem(KEY_USER, JSON.stringify(currentUser));
         updateUIForLoginState();
 
-        const remotePreferencesRaw = remoteUser && typeof remoteUser === "object" ? remoteUser.preferences : null;
+        const remotePreferencesRaw = remoteUser && typeof remoteUser === "object"
+          ? (remoteUser.Settings ?? remoteUser.settings ?? remoteUser.preferences)
+          : null;
         const sanitizedRemotePreferences = remotePreferencesRaw && typeof remotePreferencesRaw === "object"
           ? sanitizePreferences(remotePreferencesRaw)
           : null;
@@ -1630,10 +1634,12 @@
       safeTimestamp = Date.now();
     }
 
+    const sanitizedPrefs = sanitizePreferences(userPreferences);
     const payload = {
       timers: timersArray,
       last_modified: new Date(safeTimestamp).toISOString(),
-      preferences: sanitizePreferences(userPreferences)
+      Settings: sanitizedPrefs,
+      preferences: sanitizedPrefs
     };
 
     try {
@@ -1662,7 +1668,8 @@
       return false;
     }
     try {
-      await patchAccount({ preferences: sanitizePreferences(userPreferences) });
+      const sanitizedPrefs = sanitizePreferences(userPreferences);
+      await patchAccount({ Settings: sanitizedPrefs, preferences: sanitizedPrefs });
       return true;
     } catch (error) {
       if (error.message === "no-current-user") {
