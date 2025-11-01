@@ -109,7 +109,6 @@
       toggleProAccessNotice(false);
       updateStyleUI();
     });
-    enforceProModeEligibility(false);
   }
   toggleProAccessNotice(false);
 
@@ -197,6 +196,10 @@
     } else {
       toggleProAccessNotice(false);
     }
+  }
+
+  if (f.style) {
+    enforceProModeEligibility(false);
   }
 
   async function updateAndSaveTimers(newTimersArray = null) {
