@@ -112,6 +112,9 @@
   const settingsDefaultsSection = $("#settingsDefaultsSection");
   const settingsDefaultStyle = $("#settingsDefaultStyle");
   const settingsDefaultUnits = $("#settingsDefaultUnits");
+  const settingsAutoUnitsMode = $("#settingsAutoUnitsMode");
+  const settingsCustomFormatRow = $("#settingsCustomFormatRow");
+  const settingsCustomFormat = $("#settingsCustomFormat");
   const settingsDefaultsSaveBtn = $("#settingsDefaultsSaveBtn");
   const settingsDefaultsStatus = $("#settingsDefaultsStatus");
 
@@ -221,10 +224,16 @@
   };
   const PRO_MODE_ROLES = new Set(["beta tester", "special access", "owner"]);
   const ADVANCED_SETTINGS_ROLES = new Set(["special access", "beta tester", "owner"]);
-  const DEFAULT_PREFERENCES = { defaultStyle: "bar", defaultUnits: "auto" };
+  const DEFAULT_PREFERENCES = {
+    defaultStyle: "bar",
+    defaultUnits: "auto",
+    autoDisplayMode: "classic",
+    defaultCustomFormat: "{HH}:{mm}:{ss}"
+  };
   const KEY_PREFERENCE_STORE = "hyperTimer_v7_prefStore";
   const KNOWN_ANIMATION_STYLES = ["none", "bar", "ring", "pie", "multibar", "letters", "color", "pro"];
   const KNOWN_UNIT_CHOICES = ["auto", "d", "dhm", "hms", "ms", "s", "custom"];
+  const KNOWN_AUTO_MODES = ["classic", "verbose"];
   let userPreferences = { ...DEFAULT_PREFERENCES };
   let cloudAccountMissing = false;
   let lastPreferenceStatus = { message: "", tone: "neutral" };
@@ -284,11 +293,32 @@
     return DEFAULT_PREFERENCES.defaultUnits;
   }
 
+  function sanitizeAutoDisplayMode(mode) {
+    if (typeof mode === "string") {
+      const normalized = mode.trim().toLowerCase();
+      const match = KNOWN_AUTO_MODES.find(opt => opt.toLowerCase() === normalized);
+      if (match) return match;
+    }
+    return DEFAULT_PREFERENCES.autoDisplayMode;
+  }
+
+  function sanitizeCustomFormat(format) {
+    if (typeof format === "string") {
+      const trimmed = format.trim();
+      if (trimmed) {
+        return trimmed;
+      }
+    }
+    return DEFAULT_PREFERENCES.defaultCustomFormat;
+  }
+
   function sanitizePreferences(prefs) {
     const base = prefs && typeof prefs === "object" ? prefs : {};
     return {
       defaultStyle: sanitizeStylePreference(base.defaultStyle),
-      defaultUnits: sanitizeUnitsPreference(base.defaultUnits)
+      defaultUnits: sanitizeUnitsPreference(base.defaultUnits),
+      autoDisplayMode: sanitizeAutoDisplayMode(base.autoDisplayMode ?? base.autoMode ?? base.autoUnitsMode),
+      defaultCustomFormat: sanitizeCustomFormat(base.defaultCustomFormat ?? base.customFormat)
     };
   }
 
@@ -422,6 +452,8 @@
     isUpdatingPreferenceUI = true;
     const sanitizedStyle = sanitizeStylePreference(userPreferences.defaultStyle);
     const sanitizedUnits = sanitizeUnitsPreference(userPreferences.defaultUnits);
+    const sanitizedMode = sanitizeAutoDisplayMode(userPreferences.autoDisplayMode);
+    const sanitizedFormat = sanitizeCustomFormat(userPreferences.defaultCustomFormat);
     const styleValue = sanitizedStyle === "pro" && !userCanUseProMode()
       ? DEFAULT_PREFERENCES.defaultStyle
       : sanitizedStyle;
@@ -435,7 +467,24 @@
     } else if (settingsDefaultUnits.options.length) {
       settingsDefaultUnits.selectedIndex = 0;
     }
+    if (settingsAutoUnitsMode) {
+      if (settingsAutoUnitsMode.querySelector(`option[value="${sanitizedMode}"]`)) {
+        settingsAutoUnitsMode.value = sanitizedMode;
+      } else if (settingsAutoUnitsMode.options.length) {
+        settingsAutoUnitsMode.selectedIndex = 0;
+      }
+    }
+    if (settingsCustomFormat) {
+      settingsCustomFormat.value = sanitizedFormat;
+    }
     isUpdatingPreferenceUI = false;
+    updateSettingsCustomFormatVisibility();
+  }
+
+  function updateSettingsCustomFormatVisibility() {
+    if (!settingsCustomFormatRow || !settingsDefaultUnits) return;
+    const show = settingsDefaultUnits.value === "custom";
+    settingsCustomFormatRow.classList.toggle("invisible", !show);
   }
 
   function updateDefaultSettingsSection() {
@@ -453,13 +502,19 @@
   function handlePreferenceFieldChange() {
     if (isUpdatingPreferenceUI) return;
     if (!settingsDefaultStyle || !settingsDefaultUnits) return;
+    updateSettingsCustomFormatVisibility();
     const pending = sanitizePreferences({
       defaultStyle: settingsDefaultStyle.value,
-      defaultUnits: settingsDefaultUnits.value
+      defaultUnits: settingsDefaultUnits.value,
+      autoDisplayMode: settingsAutoUnitsMode ? settingsAutoUnitsMode.value : undefined,
+      defaultCustomFormat: settingsCustomFormat ? settingsCustomFormat.value : undefined
     });
+    const current = sanitizePreferences(userPreferences);
     if (
-      pending.defaultStyle === userPreferences.defaultStyle &&
-      pending.defaultUnits === userPreferences.defaultUnits
+      pending.defaultStyle === current.defaultStyle &&
+      pending.defaultUnits === current.defaultUnits &&
+      pending.autoDisplayMode === current.autoDisplayMode &&
+      pending.defaultCustomFormat === current.defaultCustomFormat
     ) {
       restorePersistedPreferenceStatus();
     } else {
@@ -476,15 +531,20 @@
 
     const pending = sanitizePreferences({
       defaultStyle: settingsDefaultStyle.value,
-      defaultUnits: settingsDefaultUnits.value
+      defaultUnits: settingsDefaultUnits.value,
+      autoDisplayMode: settingsAutoUnitsMode ? settingsAutoUnitsMode.value : undefined,
+      defaultCustomFormat: settingsCustomFormat ? settingsCustomFormat.value : undefined
     });
     const adjusted = { ...pending };
     if (adjusted.defaultStyle === "pro" && !userCanUseProMode()) {
       adjusted.defaultStyle = DEFAULT_PREFERENCES.defaultStyle;
     }
 
-    const unchanged = adjusted.defaultStyle === userPreferences.defaultStyle &&
-      adjusted.defaultUnits === userPreferences.defaultUnits;
+    const current = sanitizePreferences(userPreferences);
+    const unchanged = adjusted.defaultStyle === current.defaultStyle &&
+      adjusted.defaultUnits === current.defaultUnits &&
+      adjusted.autoDisplayMode === current.autoDisplayMode &&
+      adjusted.defaultCustomFormat === current.defaultCustomFormat;
     if (unchanged) {
       setPreferencesStatus("Defaults unchanged.", "neutral", { persist: true });
       return;
@@ -523,6 +583,26 @@
 
   function getDefaultTimerUnits() {
     return sanitizeUnitsPreference(userPreferences.defaultUnits);
+  }
+
+  function getDefaultCustomFormat() {
+    return sanitizeCustomFormat(userPreferences.defaultCustomFormat);
+  }
+
+  function getAutoDisplayMode() {
+    return sanitizeAutoDisplayMode(userPreferences.autoDisplayMode);
+  }
+
+  function resolveCustomFormatValue(rawFormat) {
+    return sanitizeCustomFormat(rawFormat);
+  }
+
+  function resolveFormatForUnits(unitsValue, inputValue) {
+    if (unitsValue === "custom") {
+      return resolveCustomFormatValue(inputValue);
+    }
+    const trimmed = typeof inputValue === "string" ? inputValue.trim() : "";
+    return trimmed || DEFAULT_PREFERENCES.defaultCustomFormat;
   }
 
   function enforceProModeEligibility(showNotice = false) {
@@ -627,6 +707,13 @@
     if (out.style === "pro"){
       ensureProSplitState(out);
     }
+    if (out.units === "custom") {
+      out.format = resolveCustomFormatValue(out.format);
+    } else if (typeof out.format === "string") {
+      out.format = out.format.trim() || DEFAULT_PREFERENCES.defaultCustomFormat;
+    } else {
+      out.format = DEFAULT_PREFERENCES.defaultCustomFormat;
+    }
     return out;
   }
 
@@ -636,6 +723,13 @@
     out.color2 = normalizeColorString(out.color2, out.color);
     if (out.style === "pro"){
       ensureProSplitState(out);
+    }
+    if (out.units === "custom") {
+      out.format = resolveCustomFormatValue(out.format);
+    } else if (typeof out.format === "string") {
+      out.format = out.format.trim() || DEFAULT_PREFERENCES.defaultCustomFormat;
+    } else {
+      out.format = DEFAULT_PREFERENCES.defaultCustomFormat;
     }
     return out;
   }
@@ -712,6 +806,52 @@
     for (const k in map) out = out.split(k).join(map[k]);
     return out;
   }
+
+  function formatAutoClassic(S, showMs){
+    const totalSeconds = S.totals;
+    if (totalSeconds >= 3600){
+      const H=Math.floor(totalSeconds/3600), M=Math.floor((totalSeconds%3600)/60), SS=totalSeconds%60;
+      return H+":"+pad2(M)+":"+pad2(SS);
+    }
+    if (totalSeconds >= 60){
+      const M=Math.floor(totalSeconds/60), SS=totalSeconds%60;
+      return M+":"+pad2(SS);
+    }
+    return S.s + (showMs? "."+pad3(S.ms):"") + "s";
+  }
+
+  function formatAutoVerbose(S, showMs){
+    if (S.d > 0){
+      const parts = [`${S.d}d`];
+      if (S.h > 0) parts.push(`${S.h}h`);
+      if (S.m > 0) parts.push(`${S.m}m`);
+      if (S.h === 0 && S.m === 0 && (S.s > 0 || showMs)){
+        parts.push(S.s + (showMs ? "." + pad3(S.ms) : "") + "s");
+      }
+      return parts.join(" ");
+    }
+    if (S.h > 0){
+      const parts = [`${S.h}h`];
+      if (S.m > 0) parts.push(`${S.m}m`);
+      if ((S.m === 0 || showMs) && (S.s > 0 || showMs)){
+        parts.push(S.s + (showMs ? "." + pad3(S.ms) : "") + "s");
+      }
+      return parts.join(" ");
+    }
+    if (S.m > 0){
+      const parts = [`${S.m}m`];
+      if (S.s > 0 || showMs){
+        parts.push(S.s + (showMs ? "." + pad3(S.ms) : "") + "s");
+      }
+      return parts.join(" ");
+    }
+    return S.s + (showMs? "."+pad3(S.ms):"") + "s";
+  }
+
+  function formatAutoByMode(S, showMs, mode){
+    if (mode === "verbose") return formatAutoVerbose(S, showMs);
+    return formatAutoClassic(S, showMs);
+  }
   function fmt(t, units="auto", showMs=false, tmpl=null, name=""){
     const S = splitTime(t);
     switch (units){
@@ -723,16 +863,8 @@
       case "custom": return fmtCustom(tmpl || "{HH}:{mm}:{ss}", S, name);
       case "auto":
       default:{
-        const totalSeconds = S.totals;
-        if (totalSeconds >= 3600){
-          const H=Math.floor(totalSeconds/3600), M=Math.floor((totalSeconds%3600)/60), SS=totalSeconds%60;
-          return H+":"+pad2(M)+":"+pad2(SS);
-        }else if (totalSeconds >= 60){
-          const M=Math.floor(totalSeconds/60), SS=totalSeconds%60;
-          return M+":"+pad2(SS);
-        }else{
-          return S.s + (showMs? "."+pad3(S.ms):"") + "s";
-        }
+        const mode = getAutoDisplayMode();
+        return formatAutoByMode(S, showMs, mode);
       }
     }
   }
@@ -979,7 +1111,7 @@
       return;
     }
     if (t.style === "pro") ensureProSplitState(t);
-    const tpl = { id:uid("tpl_"), style:t.style, color:t.color, color2:t.color2, units:t.units, format:t.format,
+    const tpl = { id:uid("tpl_"), style:t.style, color:t.color, color2:t.color2, units:t.units, format: resolveFormatForUnits(t.units, t.format),
       ring_thickness:t.ring_thickness, ease:t.ease, tick:t.tick, ms:t.ms, dotsCount:t.dotsCount, mb_bars:t.mb_bars, mb_ticks:t.mb_ticks, letters_n:t.letters_n,
       triggers:t.triggers, doneSoundDataUrl:t.doneSoundDataUrl, doneTts:t.doneTts, name: pickTemplateName(t) };
     if (t.style === "pro"){
@@ -1078,7 +1210,12 @@
   }
   function crossedPct(prevE, nowE, total, targetPct){ const prevLeft=(1-(prevE/total))*100, nowLeft=(1-(nowE/total))*100; return prevLeft>=targetPct && nowLeft<targetPct; }
   function crossedTime(prevRem, rem, targetSec){ const prevS=Math.ceil(prevRem/1000), nowS=Math.ceil(rem/1000); return prevS>=targetSec && nowS<targetSec; }
-  function fillTokens(tmpl, rem, total, t){ const left=fmt(rem, t.units, t.ms==='on', t.units==='custom'?t.format:null, t.name); const elapsed=fmt(Math.max(0,total-rem), t.units,false,t.units==='custom'?t.format:null,t.name); return (tmpl||"{left} remaining").replaceAll("{left}", left).replaceAll("{elapsed}", elapsed).replaceAll("{name}", t.name||""); }
+  function fillTokens(tmpl, rem, total, t){
+    const template = t.units === "custom" ? resolveCustomFormatValue(t.format) : null;
+    const left = fmt(rem, t.units, t.ms==='on', template, t.name);
+    const elapsed = fmt(Math.max(0,total-rem), t.units,false,template,t.name);
+    return (tmpl||"{left} remaining").replaceAll("{left}", left).replaceAll("{elapsed}", elapsed).replaceAll("{name}", t.name||"");
+  }
   function fireAction(t,tr,rem,total){ if(tr.action==="sound"){ if(tr.soundDataUrl) playDataUrl(tr.soundDataUrl); else tone(660,.18); } else { speak(fillTokens(tr.ttsTemplate, rem, total, t)); } }
   
   function updateLettersPreview(){
@@ -1133,7 +1270,8 @@
     const draft = id ? timers.find(x=>x.id===id) : {
       id: uid("t_"), name:"", mode:"duration", style: draftStyle, color: template?.color || "#6c7bff",
       color2: template?.color2 || template?.color || "#6c7bff",
-      units: draftUnits, format: template?.format || "{HH}:{mm}:{ss}",
+      units: draftUnits,
+      format: template?.format || (draftUnits === "custom" ? getDefaultCustomFormat() : "{HH}:{mm}:{ss}"),
       ring_thickness: template?.ring_thickness ?? 10, ease: template?.ease || "linear", tick: template?.tick ?? 100, ms: template?.ms || "off",
       dotsCount: template?.dotsCount ?? 60, mb_bars: template?.mb_bars ?? null, mb_ticks: template?.mb_ticks ?? null, letters_n: template?.letters_n ?? null,
       triggers: template?.triggers || [], doneSoundDataUrl: template?.doneSoundDataUrl || null, doneTts: template?.doneTts || "", prestigeLevel:0,
@@ -1142,7 +1280,15 @@
 
     f.name.value = draft.name||""; f.mode.value=draft.mode||"duration"; f.style.value=draft.style||"bar"; f.color.value=draft.color||"#6c7bff";
     if (f.color2) f.color2.value = draft.color2 || draft.color || "#6c7bff";
-    f.units.value=draft.units||"auto"; f.format.value=draft.format||"{HH}:{mm}:{ss}";
+    f.units.value = draft.units || "auto";
+    if (f.units.value === "custom") {
+      f.format.value = resolveCustomFormatValue(draft.format || getDefaultCustomFormat());
+    } else {
+      const fallbackFormat = typeof draft.format === "string" && draft.format.trim()
+        ? draft.format.trim()
+        : DEFAULT_PREFERENCES.defaultCustomFormat;
+      f.format.value = fallbackFormat;
+    }
     f.ring_thickness.value=draft.ring_thickness??10; f.ease.value=draft.ease||"linear"; f.tick.value=draft.tick??100; f.ms.value=draft.ms||"off";
     f.mb_bars.value = draft.mb_bars ?? ""; f.mb_ticks.value = draft.mb_ticks ?? ""; if (f.letters_n) f.letters_n.value = draft.letters_n ?? "";
     if (f.style) {
@@ -1685,7 +1831,9 @@
     const tpl = {
       id: uid("tpl_"), name: f.name.value.trim() || "Template", style: f.style.value, color: f.color.value,
       color2: f.color2.value || f.color.value,
-      units: f.units.value, format: f.format.value || "{HH}:{mm}:{ss}", ring_thickness: +f.ring_thickness.value || 10,
+      units: f.units.value,
+      format: resolveFormatForUnits(f.units.value, f.format.value),
+      ring_thickness: +f.ring_thickness.value || 10,
       ease: f.ease.value, tick: +f.tick.value || 100, ms: f.ms.value,
       mb_bars: f.mb_bars.value? Math.max(2, Math.min(5, +f.mb_bars.value)) : null,
       letters_n: (f.letters_n && f.letters_n.value) ? Math.max(1, Math.min(7, +f.letters_n.value)) : null,
@@ -1710,7 +1858,9 @@
     const base = {
       id: editId || uid("t_"), name: f.name.value.trim() || "Untitled", style: f.style.value, color: f.color.value,
       color2: f.color2.value || f.color.value,
-      units: f.units.value, format: f.format.value || "{HH}:{mm}:{ss}", ring_thickness: +f.ring_thickness.value || 10,
+      units: f.units.value,
+      format: resolveFormatForUnits(f.units.value, f.format.value),
+      ring_thickness: +f.ring_thickness.value || 10,
       ease: f.ease.value, tick: +f.tick.value || 100, ms: f.ms.value,
       mb_bars: f.mb_bars.value? Math.max(2, Math.min(5, +f.mb_bars.value)) : null,
       mb_ticks: f.mb_ticks.value? Math.max(8, Math.min(40, +f.mb_ticks.value)) : null,
@@ -1992,7 +2142,7 @@
     const foot = document.createElement("div");
     foot.className="footer-row";
     const pill = document.createElement("span"); pill.className="pill"; pill.dataset.role="accent-pill";
-    pill.textContent="Copy remaining"; pill.addEventListener("click", ()=>{ navigator.clipboard?.writeText(fmt(remainingMs(t), t.units, t.ms==='on', t.units==='custom'?t.format:null, t.name)); pill.textContent="Copied ✓"; setTimeout(()=>pill.textContent="Copy remaining", 900);});
+    pill.textContent="Copy remaining"; pill.addEventListener("click", ()=>{ const template = t.units==='custom'?resolveCustomFormatValue(t.format):null; navigator.clipboard?.writeText(fmt(remainingMs(t), t.units, t.ms==='on', template, t.name)); pill.textContent="Copied ✓"; setTimeout(()=>pill.textContent="Copy remaining", 900);});
     foot.appendChild(pill);
 
     const eta = document.createElement("span"); eta.className="note";
@@ -2051,7 +2201,7 @@
   function makeBig(t){
     const big=document.createElement("div"); big.className="big";
     const span=document.createElement("span"); span.className="flip";
-    const template = t.units==="custom" ? t.format : null;
+    const template = t.units==="custom" ? resolveCustomFormatValue(t.format) : null;
     span.textContent = fmt(remainingForDisplay(t), t.units, t.ms==="on", template, t.name);
     big.appendChild(span); return big;
   }
@@ -2271,7 +2421,7 @@
       if (t.style === "pro") ensureProSplitState(t);
       const cards = grid.querySelectorAll('.card[data-id="'+t.id+'"]');
       if (!cards.length) return;
-      const template = t.units==="custom" ? t.format : null;
+      const template = t.units==="custom" ? resolveCustomFormatValue(t.format) : null;
       const newTxt = fmt(remainingForDisplay(t), t.units, t.ms==="on", template, t.name);
       const progress = visualProgress(t);
 
@@ -2344,6 +2494,8 @@
   if (settingsBtn) settingsBtn.addEventListener('click', () => openSettingsDialog());
   if (settingsDefaultStyle) settingsDefaultStyle.addEventListener('change', handlePreferenceFieldChange);
   if (settingsDefaultUnits) settingsDefaultUnits.addEventListener('change', handlePreferenceFieldChange);
+  if (settingsAutoUnitsMode) settingsAutoUnitsMode.addEventListener('change', handlePreferenceFieldChange);
+  if (settingsCustomFormat) settingsCustomFormat.addEventListener('input', handlePreferenceFieldChange);
   if (settingsDefaultsSaveBtn) settingsDefaultsSaveBtn.addEventListener('click', async () => {
     await handlePreferencesSave();
   });
