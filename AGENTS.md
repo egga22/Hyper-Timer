@@ -12,3 +12,4 @@ This repository has a user access system to allow production level changes to on
 | A new banner message at the top of the page    | All users    | A banner message is likely announcing import info, so all users should no right away    |
 | A brand new major feautre thats likely to have issues    | Owner & Beta Tester    | I as the owner needs to test it, and beta users will be excited to try new major features, even if it's not fully polised.    |
 | A brand new major feautre thats unlikely to have issues   | Owner, Beta Tester, Special Access   | Similar to the row above, although special Access users can try it sense it's unlikely to have issues. Standard users can't have access, as it's still brand new and experimental.   |
+| An adjustment to a recently added feature | The same access settings as the feature to adjust | Should be self-explanitory |
