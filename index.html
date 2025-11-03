@@ -209,8 +209,17 @@
                 <option value="week">Week(s)</option>
                 <option value="month">Month(s)</option>
                 <option value="year">Year(s)</option>
+                <option value="shortterm">Short term schedule</option>
               </select>
             </div>
+          </div>
+          <div id="loopShortTermSummary" class="field invisible">
+            <label>Short term schedule</label>
+            <div class="shortterm-summary">
+              <div id="loopShortTermSummaryText" class="shortterm-summary-text">Add events to get started.</div>
+              <button class="btn" type="button" id="loopShortTermEditBtn">Edit schedule</button>
+            </div>
+            <div class="note">Events define the exact times this timer targets. We'll always jump to the next upcoming event.</div>
           </div>
           <div id="loopingWeeklyControls" class="field-group invisible">
             <div class="field">
@@ -279,6 +288,28 @@
           <button class="btn primary" id="saveBtn" type="button">Save</button>
         </div>
       </div>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="shortTermLoopDialog">
+  <form method="dialog" novalidate>
+    <div class="dialog-header">
+      <div class="title" id="shortTermDialogTitle">Short term schedule</div>
+      <button class="btn" value="cancel">✕</button>
+    </div>
+    <div class="dialog-body shortterm-dialog-body">
+      <div class="note">Create events for classes, meetings, or any appointments that move around. We'll always pick the next one.</div>
+      <div id="shortTermEventsEmpty" class="shortterm-empty">No events yet — add one to begin.</div>
+      <div id="shortTermEventsList" class="shortterm-events"></div>
+      <div class="shortterm-actions">
+        <button class="btn" type="button" id="addShortTermWeeklyBtn">Add weekly event</button>
+        <button class="btn" type="button" id="addShortTermSingleBtn">Add one-time event</button>
+      </div>
+    </div>
+    <div class="dialog-footer">
+      <button class="btn" value="cancel">Cancel</button>
+      <button class="btn primary" id="saveShortTermEventsBtn" type="button">Done</button>
     </div>
   </form>
 </dialog>

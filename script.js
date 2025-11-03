@@ -119,6 +119,12 @@
   const settingsDefaultsStatus = $("#settingsDefaultsStatus");
   const settingsLoopsSection = $("#settingsLoopsSection");
   const settingsLoopsToggle = $("#settingsLoopsToggle");
+  const shortTermDialog = $("#shortTermLoopDialog");
+  const shortTermEventsList = $("#shortTermEventsList");
+  const shortTermEventsEmpty = $("#shortTermEventsEmpty");
+  const addShortTermWeeklyBtn = $("#addShortTermWeeklyBtn");
+  const addShortTermSingleBtn = $("#addShortTermSingleBtn");
+  const saveShortTermEventsBtn = $("#saveShortTermEventsBtn");
 
   function resetAuthDialogState() {
     const submitBtn = $("#authSubmitBtn");
@@ -172,6 +178,9 @@
     loopMonthlyOrdinalRow: $("#loopMonthlyOrdinalRow"),
     loopAlignRow: $("#loopingAlignRow"),
     loopAlignStart: $("#f_loopAlignStart"),
+    loopShortTermSummary: $("#loopShortTermSummary"),
+    loopShortTermSummaryText: $("#loopShortTermSummaryText"),
+    loopShortTermEditBtn: $("#loopShortTermEditBtn"),
   };
   const customFormatRow = $("#customFormatRow");
 
@@ -244,10 +253,12 @@
   const PRO_MODE_ROLES = new Set(["beta tester", "special access", "owner"]);
   const ADVANCED_SETTINGS_ROLES = new Set(["special access", "beta tester", "owner"]);
   const LOOP_FEATURE_ROLES = new Set(["beta tester", "owner"]);
-  const LOOP_INTERVAL_UNITS = new Set(["day", "week", "month", "year"]);
+  const LOOP_INTERVAL_UNITS = new Set(["day", "week", "month", "year", "shortterm"]);
+  const SHORT_TERM_TYPES = new Set(["weekly", "single"]);
   const MONTHLY_MODES = new Set(["day", "weekday"]);
   const MONTHLY_ORDINALS = ["first", "second", "third", "fourth", "last"];
   const MONTHLY_ORDINAL_INDEX = { first: 0, second: 1, third: 2, fourth: 3, last: -1 };
+  const WEEKDAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
   const DEFAULT_LOOP_CONFIG = {
     enabled: false,
     interval: 1,
@@ -257,7 +268,8 @@
     monthlyDay: 1,
     monthlyOrdinal: "first",
     monthlyWeekday: 0,
-    alignStartToEnd: false
+    alignStartToEnd: false,
+    events: []
   };
   const DEFAULT_PREFERENCES = {
     defaultStyle: "bar",
@@ -275,6 +287,9 @@
   let lastPreferenceStatus = { message: "", tone: "neutral" };
   let persistedPreferenceStatus = { message: "", tone: "neutral" };
   let isUpdatingPreferenceUI = false;
+  let shortTermEventsDraft = [];
+  let shortTermDialogEvents = [];
+  let suppressLoopUnitChange = false;
 
   function normalizeRole(role) {
     if (typeof role === "string") {
@@ -365,6 +380,226 @@
     return value === true || value === 1;
   }
 
+  function toLocalDateInputValue(date) {
+    const yyyy = date.getFullYear();
+    const mm = pad2(date.getMonth() + 1);
+    const dd = pad2(date.getDate());
+    return `${yyyy}-${mm}-${dd}`;
+  }
+
+  function parseTimeOfDay(raw) {
+    if (raw && typeof raw === "object") {
+      const hour = Number(raw.hour ?? raw.h ?? raw.hours);
+      const minute = Number(raw.minute ?? raw.min ?? raw.minutes ?? raw.m);
+      if (Number.isFinite(hour) && Number.isFinite(minute)) {
+        return { hour: clamp(Math.round(hour), 0, 23), minute: clamp(Math.round(minute), 0, 59) };
+      }
+    }
+    if (typeof raw === "number" && Number.isFinite(raw)) {
+      const hour = clamp(Math.floor(raw), 0, 23);
+      const minute = clamp(Math.round((raw - Math.floor(raw)) * 60), 0, 59);
+      return { hour, minute };
+    }
+    if (typeof raw === "string") {
+      const trimmed = raw.trim();
+      if (!trimmed) return null;
+      const colon = trimmed.match(/^(\d{1,2})(?::(\d{1,2}))?$/);
+      if (colon) {
+        const hour = clamp(Number(colon[1]), 0, 23);
+        const minute = clamp(Number(colon[2] ?? "0"), 0, 59);
+        return { hour, minute };
+      }
+      const compact = trimmed.match(/^(\d{1,2})(\d{2})$/);
+      if (compact) {
+        const hour = clamp(Number(compact[1]), 0, 23);
+        const minute = clamp(Number(compact[2]), 0, 59);
+        return { hour, minute };
+      }
+    }
+    return null;
+  }
+
+  function formatTimeOfDay(hour, minute) {
+    const h = clamp(Number.isFinite(hour) ? Math.round(hour) : 0, 0, 23);
+    const m = clamp(Number.isFinite(minute) ? Math.round(minute) : 0, 0, 59);
+    return `${pad2(h)}:${pad2(m)}`;
+  }
+
+  function cloneShortTermEvents(list = []) {
+    return Array.isArray(list) ? list.map(ev => ({ ...ev })) : [];
+  }
+
+  function combineDateAndTime(dateStr, hour, minute) {
+    if (typeof dateStr !== "string" || !dateStr) return null;
+    const match = dateStr.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!match) return null;
+    const [_, y, m, d] = match;
+    const dt = new Date(Number(y), Number(m) - 1, Number(d), clamp(Math.round(hour ?? 0), 0, 23), clamp(Math.round(minute ?? 0), 0, 59), 0, 0);
+    return dt.getTime();
+  }
+
+  function sanitizeShortTermEvent(raw, referenceMs = null) {
+    if (!raw || typeof raw !== "object") return null;
+    const id = typeof raw.id === "string" && raw.id.trim() ? raw.id.trim() : uid("ste_");
+    let label = typeof raw.label === "string" ? raw.label.trim() : "";
+    if (!label && typeof raw.name === "string") label = raw.name.trim();
+    if (!label) label = "Event";
+    let typeRaw = typeof raw.type === "string" ? raw.type.trim().toLowerCase() : "";
+    if (!SHORT_TERM_TYPES.has(typeRaw)) {
+      const repeatRaw = typeof raw.repeat === "string" ? raw.repeat.trim().toLowerCase() : "";
+      if (["once", "single", "one-time", "onetime"].includes(repeatRaw)) {
+        typeRaw = "single";
+      } else if (repeatRaw === "weekly") {
+        typeRaw = "weekly";
+      } else if (sanitizeBoolean(raw.repeatWeekly)) {
+        typeRaw = "weekly";
+      }
+    }
+    const inferredType = SHORT_TERM_TYPES.has(typeRaw)
+      ? typeRaw
+      : ((raw.date || raw.timestamp || raw.when || raw.datetime) ? "single" : "weekly");
+    if (inferredType === "single") {
+      let timestamp = parseTimestamp(raw.timestamp ?? raw.when ?? raw.datetime ?? raw.date ?? null);
+      let dateValue = typeof raw.date === "string" ? raw.date.trim() : "";
+      let timeValue = parseTimeOfDay(raw.time ?? raw.timeOfDay ?? { hour: raw.hour, minute: raw.minute });
+      if (!Number.isFinite(timestamp) || timestamp <= 0) {
+        if (dateValue) {
+          const combined = combineDateAndTime(dateValue, timeValue?.hour ?? null, timeValue?.minute ?? null);
+          if (Number.isFinite(combined)) {
+            timestamp = combined;
+          }
+        }
+      }
+      if ((!Number.isFinite(timestamp) || timestamp <= 0) && timeValue) {
+        const base = Number.isFinite(referenceMs) ? new Date(referenceMs) : new Date();
+        base.setSeconds(0, 0);
+        base.setHours(timeValue.hour, timeValue.minute, 0, 0);
+        if (base.getTime() <= now()) {
+          base.setDate(base.getDate() + 1);
+        }
+        timestamp = base.getTime();
+        dateValue = toLocalDateInputValue(base);
+      }
+      if (!Number.isFinite(timestamp)) {
+        return null;
+      }
+      const dt = new Date(timestamp);
+      const fallbackTime = timeValue || { hour: dt.getHours(), minute: dt.getMinutes() };
+      return {
+        id,
+        label,
+        type: "single",
+        date: dateValue || toLocalDateInputValue(dt),
+        hour: clamp(Math.round(fallbackTime.hour ?? dt.getHours()), 0, 23),
+        minute: clamp(Math.round(fallbackTime.minute ?? dt.getMinutes()), 0, 59),
+        timestamp
+      };
+    }
+    let weekday = Number(raw.weekday ?? raw.day ?? raw.dayOfWeek ?? raw.dow);
+    if (!Number.isFinite(weekday)) {
+      const ts = parseTimestamp(raw.timestamp ?? raw.when ?? raw.datetime ?? null);
+      if (Number.isFinite(ts)) {
+        weekday = new Date(ts).getDay();
+      }
+    }
+    if (!Number.isFinite(weekday)) {
+      if (Number.isFinite(referenceMs)) {
+        weekday = new Date(referenceMs).getDay();
+      } else {
+        weekday = new Date().getDay();
+      }
+    }
+    weekday = clamp(Math.round(weekday), 0, 6);
+    let timeValue = parseTimeOfDay(raw.time ?? raw.timeOfDay ?? { hour: raw.hour, minute: raw.minute });
+    if (!timeValue) {
+      const ts = parseTimestamp(raw.timestamp ?? raw.when ?? raw.datetime ?? null);
+      if (Number.isFinite(ts)) {
+        const dt = new Date(ts);
+        timeValue = { hour: dt.getHours(), minute: dt.getMinutes() };
+      }
+    }
+    if (!timeValue) {
+      const ref = Number.isFinite(referenceMs) ? new Date(referenceMs) : new Date();
+      timeValue = { hour: ref.getHours(), minute: ref.getMinutes() };
+    }
+    return {
+      id,
+      label,
+      type: "weekly",
+      weekday,
+      hour: clamp(Math.round(timeValue.hour ?? 0), 0, 23),
+      minute: clamp(Math.round(timeValue.minute ?? 0), 0, 59)
+    };
+  }
+
+  function sanitizeShortTermEvents(source, referenceMs = null) {
+    const list = Array.isArray(source) ? source : (source && typeof source === "object" && Array.isArray(source.events) ? source.events : []);
+    const sanitized = [];
+    const seen = new Set();
+    for (const entry of list) {
+      const event = sanitizeShortTermEvent(entry, referenceMs);
+      if (!event) continue;
+      let id = event.id;
+      while (seen.has(id)) {
+        id = uid("ste_");
+      }
+      if (id !== event.id) event.id = id;
+      seen.add(id);
+      sanitized.push(event);
+    }
+    return sanitized;
+  }
+
+  function nextOccurrenceForEvent(event, afterMs = null) {
+    if (!event || typeof event !== "object") return null;
+    const reference = Number.isFinite(afterMs) ? afterMs : now();
+    if (event.type === "single") {
+      const ts = Number(event.timestamp ?? combineDateAndTime(event.date, event.hour, event.minute));
+      if (!Number.isFinite(ts)) return null;
+      return ts >= reference ? ts : null;
+    }
+    if (event.type === "weekly") {
+      const base = new Date(reference);
+      base.setSeconds(0, 0);
+      const candidate = new Date(base);
+      candidate.setHours(clamp(Math.round(event.hour ?? 0), 0, 23), clamp(Math.round(event.minute ?? 0), 0, 59), 0, 0);
+      const baseDay = candidate.getDay();
+      let offset = (Number(event.weekday ?? 0) - baseDay + 7) % 7;
+      if (offset === 0 && candidate.getTime() <= reference) {
+        offset = 7;
+      }
+      candidate.setDate(candidate.getDate() + offset);
+      return candidate.getTime();
+    }
+    return null;
+  }
+
+  function findNextShortTermOccurrence(events, afterMs = null) {
+    const list = Array.isArray(events) ? events : [];
+    const reference = Number.isFinite(afterMs) ? afterMs : now();
+    let best = null;
+    for (const event of list) {
+      const ts = nextOccurrenceForEvent(event, reference);
+      if (!Number.isFinite(ts)) continue;
+      if (!best || ts < best.timestamp || (ts === best.timestamp && (event.label || "") < (best.event.label || ""))) {
+        best = { event, timestamp: ts };
+      }
+    }
+    return best;
+  }
+
+  function describeShortTermOccurrence(event, timestamp) {
+    if (!Number.isFinite(timestamp)) return "";
+    const dt = new Date(timestamp);
+    const weekday = WEEKDAY_NAMES[dt.getDay()] || "";
+    const timeLabel = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(dt);
+    if (event && event.type === "single") {
+      const dateLabel = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(dt);
+      return `${weekday}, ${dateLabel} • ${timeLabel}`;
+    }
+    return `${weekday} • ${timeLabel}`;
+  }
+
   function sanitizeLoopConfig(rawConfig, mode, referenceMs = null) {
     const base = rawConfig && typeof rawConfig === "object" ? rawConfig : {};
     const supported = mode === "duration" || mode === "datetime";
@@ -409,10 +644,12 @@
     let weekdayRaw = Number(base.monthlyWeekday);
     if (!Number.isFinite(weekdayRaw)) weekdayRaw = refWeekday;
     const monthlyWeekday = clamp(Math.round(weekdayRaw), 0, 6);
-    const alignStartToEnd = mode === "datetime" && sanitizeBoolean(base.alignStartToEnd);
+    const alignStartToEnd = mode === "datetime" && unit !== "shortterm" && sanitizeBoolean(base.alignStartToEnd);
+    const events = unit === "shortterm" ? sanitizeShortTermEvents(base.events ?? base.schedule ?? base.shortTermEvents ?? [], referenceMs) : [];
+    const finalEnabled = unit === "shortterm" ? (enabled && events.length > 0) : enabled;
     return {
       ...DEFAULT_LOOP_CONFIG,
-      enabled,
+      enabled: finalEnabled,
       interval,
       unit,
       weeklyDays,
@@ -420,7 +657,8 @@
       monthlyDay,
       monthlyOrdinal,
       monthlyWeekday,
-      alignStartToEnd
+      alignStartToEnd,
+      events
     };
   }
 
@@ -450,16 +688,19 @@
       const inputs = $$('input[type="checkbox"]', f.loopWeeklyDays);
       weeklyDays = inputs.filter(input => input.checked).map(input => Number(input.value));
     }
+    const unitValue = f.loopUnit ? f.loopUnit.value : existing.unit;
+    const events = unitValue === "shortterm" ? cloneShortTermEvents(shortTermEventsDraft) : existing.events;
     const raw = {
       enabled: f.loopEnabled ? f.loopEnabled.checked : false,
       interval: f.loopInterval ? f.loopInterval.value : existing.interval,
-      unit: f.loopUnit ? f.loopUnit.value : existing.unit,
+      unit: unitValue,
       weeklyDays,
       monthlyMode: f.loopMonthlyMode ? f.loopMonthlyMode.value : existing.monthlyMode,
       monthlyDay: f.loopMonthlyDay ? f.loopMonthlyDay.value : existing.monthlyDay,
       monthlyOrdinal: f.loopMonthlyOrdinal ? f.loopMonthlyOrdinal.value : existing.monthlyOrdinal,
       monthlyWeekday: f.loopMonthlyWeekday ? f.loopMonthlyWeekday.value : existing.monthlyWeekday,
-      alignStartToEnd: f.loopAlignStart ? f.loopAlignStart.checked : existing.alignStartToEnd
+      alignStartToEnd: f.loopAlignStart ? f.loopAlignStart.checked : existing.alignStartToEnd,
+      events
     };
     const reference = mode === "datetime"
       ? (f.when && f.when.value ? parseLocalDateTime(f.when.value) : referenceMs)
@@ -678,6 +919,264 @@
         updateLoopingMonthlyModeFields();
       }
     }
+    const intervalField = f.loopInterval ? f.loopInterval.closest('.field') : null;
+    if (intervalField) {
+      intervalField.classList.toggle('invisible', unit === "shortterm");
+    }
+    if (f.loopShortTermSummary) {
+      const shouldShow = datetimeVisible && unit === "shortterm";
+      f.loopShortTermSummary.classList.toggle("invisible", !shouldShow);
+    }
+    updateShortTermSummary();
+  }
+
+  function ensureShortTermTarget() {
+    if (!f.when || !f.loopUnit || f.loopUnit.value !== "shortterm") return;
+    if (!f.loopEnabled || !f.loopEnabled.checked) return;
+    if (!f.mode || f.mode.value !== "datetime") return;
+    const events = Array.isArray(shortTermEventsDraft) ? shortTermEventsDraft : [];
+    if (!events.length) return;
+    const next = findNextShortTermOccurrence(events, now());
+    if (next && Number.isFinite(next.timestamp)) {
+      try {
+        f.when.value = toLocalDatetime(new Date(next.timestamp));
+      } catch (err) {
+        // ignore assignment failures
+      }
+    }
+  }
+
+  function updateShortTermSummary() {
+    if (!f.loopShortTermSummary || !f.loopShortTermSummaryText) return;
+    if (!f.loopUnit || f.loopUnit.value !== "shortterm") return;
+    const loopsAvailable = isLoopsFeatureEnabled();
+    const mode = f.mode ? f.mode.value : "duration";
+    const events = Array.isArray(shortTermEventsDraft) ? shortTermEventsDraft : [];
+    const loopsChecked = !!(f.loopEnabled && f.loopEnabled.checked);
+    if (!loopsAvailable) {
+      f.loopShortTermSummaryText.textContent = "Loops are unavailable for this account.";
+      return;
+    }
+    if (mode !== "datetime") {
+      f.loopShortTermSummaryText.textContent = "Short term schedules work with target timers.";
+      return;
+    }
+    if (!events.length) {
+      f.loopShortTermSummaryText.textContent = "Add events to get started.";
+      return;
+    }
+    const next = findNextShortTermOccurrence(events, now());
+    if (!loopsChecked) {
+      if (next) {
+        f.loopShortTermSummaryText.textContent = `Next up: ${next.event.label} — ${describeShortTermOccurrence(next.event, next.timestamp)}. Enable looping to activate.`;
+      } else {
+        f.loopShortTermSummaryText.textContent = "Enable looping to activate this schedule.";
+      }
+      return;
+    }
+    if (next) {
+      f.loopShortTermSummaryText.textContent = `Next: ${next.event.label} — ${describeShortTermOccurrence(next.event, next.timestamp)}`;
+      ensureShortTermTarget();
+    } else {
+      f.loopShortTermSummaryText.textContent = "No upcoming events — we'll pause after the current countdown.";
+    }
+  }
+
+  function createDefaultShortTermEvent(type = "weekly") {
+    const base = new Date();
+    base.setSeconds(0, 0);
+    base.setMinutes(base.getMinutes() + 5);
+    const roundedMinutes = Math.min(55, Math.ceil(base.getMinutes() / 5) * 5);
+    if (roundedMinutes >= 60) {
+      base.setHours(base.getHours() + 1);
+      base.setMinutes(0);
+    } else {
+      base.setMinutes(roundedMinutes);
+    }
+    const hour = base.getHours();
+    const minute = base.getMinutes();
+    if (type === "single") {
+      const dateStr = toLocalDateInputValue(base);
+      return {
+        id: uid("ste_"),
+        label: "New event",
+        type: "single",
+        date: dateStr,
+        hour,
+        minute,
+        timestamp: combineDateAndTime(dateStr, hour, minute)
+      };
+    }
+    return {
+      id: uid("ste_"),
+      label: "New event",
+      type: "weekly",
+      weekday: base.getDay(),
+      hour,
+      minute
+    };
+  }
+
+  function buildShortTermEventRow(event) {
+    const row = document.createElement("div");
+    row.className = "shortterm-event";
+    row.dataset.id = event.id;
+
+    const header = document.createElement("div");
+    header.className = "shortterm-event-header";
+
+    const labelInput = document.createElement("input");
+    labelInput.type = "text";
+    labelInput.placeholder = "Event name";
+    labelInput.value = event.label || "";
+    labelInput.addEventListener("input", () => {
+      event.label = labelInput.value;
+    });
+    header.appendChild(labelInput);
+
+    const typeSelect = document.createElement("select");
+    typeSelect.innerHTML = '<option value="weekly">Weekly</option><option value="single">One-time</option>';
+    typeSelect.value = event.type === "single" ? "single" : "weekly";
+    typeSelect.addEventListener("change", () => {
+      const newType = typeSelect.value === "single" ? "single" : "weekly";
+      event.type = newType;
+      if (newType === "single") {
+        const base = new Date();
+        event.date = event.date || toLocalDateInputValue(base);
+        event.timestamp = combineDateAndTime(event.date, event.hour, event.minute);
+      } else {
+        if (!Number.isFinite(event.weekday)) {
+          event.weekday = new Date().getDay();
+        }
+        delete event.date;
+        delete event.timestamp;
+      }
+      renderShortTermEventList();
+    });
+    header.appendChild(typeSelect);
+
+    const removeBtn = document.createElement("button");
+    removeBtn.type = "button";
+    removeBtn.className = "btn icon shortterm-remove";
+    removeBtn.title = "Remove";
+    removeBtn.setAttribute("aria-label", "Remove event");
+    removeBtn.textContent = "✕";
+    removeBtn.addEventListener("click", () => {
+      shortTermDialogEvents = shortTermDialogEvents.filter(ev => ev.id !== event.id);
+      renderShortTermEventList();
+    });
+    header.appendChild(removeBtn);
+
+    row.appendChild(header);
+
+    const body = document.createElement("div");
+    body.className = "shortterm-event-body";
+    if (event.type === "single") {
+      const dateInput = document.createElement("input");
+      dateInput.type = "date";
+      dateInput.value = event.date || toLocalDateInputValue(new Date());
+      dateInput.addEventListener("change", () => {
+        event.date = dateInput.value;
+        event.timestamp = combineDateAndTime(event.date, event.hour, event.minute);
+      });
+      body.appendChild(dateInput);
+
+      const timeInput = document.createElement("input");
+      timeInput.type = "time";
+      timeInput.value = formatTimeOfDay(event.hour, event.minute);
+      timeInput.addEventListener("change", () => {
+        const parsed = parseTimeOfDay(timeInput.value);
+        if (parsed) {
+          event.hour = parsed.hour;
+          event.minute = parsed.minute;
+          event.timestamp = combineDateAndTime(event.date || toLocalDateInputValue(new Date()), event.hour, event.minute);
+        }
+      });
+      body.appendChild(timeInput);
+    } else {
+      const weekdaySelect = document.createElement("select");
+      WEEKDAY_NAMES.forEach((name, index) => {
+        const option = document.createElement("option");
+        option.value = String(index);
+        option.textContent = name;
+        weekdaySelect.appendChild(option);
+      });
+      weekdaySelect.value = String(clamp(Number(event.weekday ?? 0), 0, 6));
+      weekdaySelect.addEventListener("change", () => {
+        event.weekday = clamp(Number(weekdaySelect.value), 0, 6);
+      });
+      body.appendChild(weekdaySelect);
+
+      const timeInput = document.createElement("input");
+      timeInput.type = "time";
+      timeInput.value = formatTimeOfDay(event.hour, event.minute);
+      timeInput.addEventListener("change", () => {
+        const parsed = parseTimeOfDay(timeInput.value);
+        if (parsed) {
+          event.hour = parsed.hour;
+          event.minute = parsed.minute;
+        }
+      });
+      body.appendChild(timeInput);
+    }
+    row.appendChild(body);
+    return row;
+  }
+
+  function renderShortTermEventList() {
+    if (!shortTermEventsList || !shortTermEventsEmpty) return;
+    shortTermEventsList.innerHTML = "";
+    if (!Array.isArray(shortTermDialogEvents) || shortTermDialogEvents.length === 0) {
+      shortTermEventsEmpty.classList.remove("invisible");
+      return;
+    }
+    shortTermEventsEmpty.classList.add("invisible");
+    shortTermDialogEvents.forEach(event => {
+      shortTermEventsList.appendChild(buildShortTermEventRow(event));
+    });
+  }
+
+  function closeShortTermDialog() {
+    if (!shortTermDialog) return;
+    try {
+      shortTermDialog.close();
+    } catch (err) {
+      shortTermDialog.removeAttribute("open");
+    }
+    shortTermDialogEvents = [];
+  }
+
+  function openShortTermDialog({ autoCreate = false } = {}) {
+    if (!shortTermDialog) return;
+    shortTermDialogEvents = cloneShortTermEvents(shortTermEventsDraft);
+    if (autoCreate && shortTermDialogEvents.length === 0) {
+      shortTermDialogEvents.push(createDefaultShortTermEvent("weekly"));
+    }
+    if (shortTermEventsEmpty) shortTermEventsEmpty.classList.add("invisible");
+    renderShortTermEventList();
+    try {
+      shortTermDialog.showModal();
+    } catch (err) {
+      shortTermDialog.setAttribute("open", "");
+    }
+  }
+
+  function handleShortTermSave() {
+    const sanitized = sanitizeShortTermEvents(shortTermDialogEvents);
+    shortTermEventsDraft = cloneShortTermEvents(sanitized);
+    closeShortTermDialog();
+    if (sanitized.length && f.when) {
+      const next = findNextShortTermOccurrence(sanitized, now());
+      if (next && Number.isFinite(next.timestamp)) {
+        try {
+          f.when.value = toLocalDatetime(new Date(next.timestamp));
+        } catch (err) {
+          // ignore assignment failure
+        }
+      }
+    }
+    updateShortTermSummary();
+    ensureShortTermTarget();
   }
 
   function updateLoopingFieldsForMode() {
@@ -696,7 +1195,8 @@
       f.loopDatetimeFields.classList.add("invisible");
     }
     if (f.loopAlignRow) {
-      f.loopAlignRow.classList.toggle("invisible", !(toggleChecked && mode === "datetime"));
+      const hideAlign = f.loopUnit && f.loopUnit.value === "shortterm";
+      f.loopAlignRow.classList.toggle("invisible", !(toggleChecked && mode === "datetime") || hideAlign);
     }
     updateLoopingUnitFields();
   }
@@ -1184,6 +1684,16 @@
         result.setFullYear(result.getFullYear() + config.interval);
         break;
       }
+      case "shortterm": {
+        const events = Array.isArray(config.events) ? config.events : [];
+        const after = Number.isFinite(previousTargetMs) ? previousTargetMs + 1 : now();
+        const next = findNextShortTermOccurrence(events, after);
+        if (next && Number.isFinite(next.timestamp)) {
+          return next.timestamp;
+        }
+        const fallback = Number(previousTargetMs) || now();
+        return fallback + Math.max(1, config.interval || 1) * 86400000;
+      }
       case "day":
       default: {
         result = new Date(baseDate);
@@ -1197,6 +1707,15 @@
 
   function computeNextLoopTarget(t, config){
     const baseTarget = Number(t.targetMs) || now();
+    if (config.unit === "shortterm") {
+      const events = Array.isArray(config.events) ? config.events : [];
+      const after = Math.max(now(), Number.isFinite(baseTarget) ? baseTarget + 1 : now());
+      const next = findNextShortTermOccurrence(events, after);
+      if (next && Number.isFinite(next.timestamp)) {
+        return next.timestamp;
+      }
+      return (Number.isFinite(baseTarget) ? baseTarget : now()) + Math.max(1, config.interval || 1) * 86400000;
+    }
     let candidate = addLoopInterval(baseTarget, config);
     const nowTs = now();
     let guard = 0;
@@ -1707,12 +2226,15 @@
     const sanitizedLoop = sanitizeLoopConfig(loopSource, draft.mode, loopReferenceMs);
     if (f.loopInterval) f.loopInterval.value = sanitizedLoop.interval;
     if (f.loopUnit) {
+      suppressLoopUnitChange = true;
       if (f.loopUnit.querySelector(`option[value="${sanitizedLoop.unit}"]`)) {
         f.loopUnit.value = sanitizedLoop.unit;
       } else if (f.loopUnit.options.length) {
         f.loopUnit.selectedIndex = 0;
       }
+      suppressLoopUnitChange = false;
     }
+    shortTermEventsDraft = cloneShortTermEvents(sanitizedLoop.events || []);
     if (f.loopWeeklyDays) {
       const selectedDays = new Set((sanitizedLoop.weeklyDays || []).map(day => String(clamp(Number(day), 0, 6))));
       const inputs = $$('input[type="checkbox"]', f.loopWeeklyDays);
@@ -1744,6 +2266,7 @@
     if (f.loopAlignStart) {
       f.loopAlignStart.checked = !!sanitizedLoop.alignStartToEnd;
     }
+    updateShortTermSummary();
 
     renderTrList(draft.triggers||[]);
     f.addPctBtn.onclick = ()=> $("#trList").appendChild(trRow({type:"percent", valuePercent:25, action:"tts", ttsTemplate:"{left} left"}));
@@ -2604,6 +3127,17 @@
     if (t.mode==="datetime" || t.mode==="smart"){ const d=new Date(t.targetMs); eta.textContent="Ends "+d.toLocaleString(); }
     else { const d = new Date(t.start + (t.duration||0)); eta.textContent = "ETA " + d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}); }
     foot.appendChild(eta);
+    if (timerLoopsEnabled(t) && t.mode === "datetime" && t.loopConfig && t.loopConfig.unit === "shortterm") {
+      const nextShort = findNextShortTermOccurrence(t.loopConfig.events || [], now());
+      const note = document.createElement("div");
+      note.className = "loop-note";
+      if (nextShort && Number.isFinite(nextShort.timestamp)) {
+        note.innerHTML = `<strong>Next:</strong> ${escapeHtml(nextShort.event.label || "Event")} — ${escapeHtml(describeShortTermOccurrence(nextShort.event, nextShort.timestamp))}`;
+      } else {
+        note.textContent = "No upcoming short term events.";
+      }
+      foot.appendChild(note);
+    }
     card.appendChild(foot);
 
     actions.addEventListener("click", async ev=>{
@@ -2963,9 +3497,34 @@
     const pending = sanitizePreferences({ ...userPreferences, loopsEnabled: settingsLoopsToggle.checked });
     applyPreferencesToState(pending);
   });
-  if (f.loopEnabled) f.loopEnabled.addEventListener('change', updateLoopingFieldsForMode);
-  if (f.loopUnit) f.loopUnit.addEventListener('change', updateLoopingFieldsForMode);
+  if (f.loopEnabled) f.loopEnabled.addEventListener('change', () => {
+    updateLoopingFieldsForMode();
+    updateShortTermSummary();
+  });
+  if (f.loopUnit) f.loopUnit.addEventListener('change', () => {
+    updateLoopingFieldsForMode();
+    if (!suppressLoopUnitChange && f.loopUnit.value === "shortterm") {
+      openShortTermDialog({ autoCreate: shortTermEventsDraft.length === 0 });
+    }
+  });
   if (f.loopMonthlyMode) f.loopMonthlyMode.addEventListener('change', updateLoopingMonthlyModeFields);
+  if (f.loopShortTermEditBtn) f.loopShortTermEditBtn.addEventListener('click', () => openShortTermDialog({ autoCreate: shortTermEventsDraft.length === 0 }));
+  if (addShortTermWeeklyBtn) addShortTermWeeklyBtn.addEventListener('click', () => {
+    shortTermDialogEvents.push(createDefaultShortTermEvent("weekly"));
+    renderShortTermEventList();
+  });
+  if (addShortTermSingleBtn) addShortTermSingleBtn.addEventListener('click', () => {
+    shortTermDialogEvents.push(createDefaultShortTermEvent("single"));
+    renderShortTermEventList();
+  });
+  if (saveShortTermEventsBtn) saveShortTermEventsBtn.addEventListener('click', handleShortTermSave);
+  if (shortTermDialog) {
+    shortTermDialog.addEventListener('close', () => {
+      shortTermDialogEvents = [];
+      if (shortTermEventsList) shortTermEventsList.innerHTML = "";
+      if (shortTermEventsEmpty) shortTermEventsEmpty.classList.remove("invisible");
+    });
+  }
   if (settingsDefaultsSaveBtn) settingsDefaultsSaveBtn.addEventListener('click', async () => {
     await handlePreferencesSave();
   });
