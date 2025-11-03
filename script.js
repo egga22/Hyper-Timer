@@ -365,6 +365,27 @@
     return value === true || value === 1;
   }
 
+  /**
+   * Produce a validated and normalized loop configuration object from raw input.
+   *
+   * Sanitizes fields suitable for "duration" or "datetime" loop modes, applies defaults
+   * from DEFAULT_LOOP_CONFIG, normalizes numeric bounds, parses weeklyDays from several
+   * input shapes, and derives sensible fallbacks using referenceMs when provided.
+   *
+   * @param {Object|null|undefined} rawConfig - Raw loop configuration (may be partial or in legacy shapes).
+   * @param {string} mode - Loop mode context; expected "duration" or "datetime".
+   * @param {number|null} [referenceMs=null] - Optional reference timestamp (ms since epoch) used to derive sensible defaults for day/weekday when missing or invalid.
+   * @returns {Object} A sanitized loop configuration containing:
+   *  - enabled: boolean
+   *  - interval: integer >= 1
+   *  - unit: one of the LOOP_INTERVAL_UNITS (defaults to "day")
+   *  - weeklyDays: sorted array of weekday numbers (0=Sunday..6=Saturday) with at least one entry
+   *  - monthlyMode: one of MONTHLY_MODES
+   *  - monthlyDay: integer 1..31
+   *  - monthlyOrdinal: one of MONTHLY_ORDINALS
+   *  - monthlyWeekday: integer 0..6
+   *  - alignStartToEnd: boolean (true only for "datetime" mode when requested)
+   */
   function sanitizeLoopConfig(rawConfig, mode, referenceMs = null) {
     const base = rawConfig && typeof rawConfig === "object" ? rawConfig : {};
     const supported = mode === "duration" || mode === "datetime";
@@ -435,6 +456,13 @@
     };
   }
 
+  /**
+   * Build a loop configuration from the editor form, merging with an existing config and returning a sanitized result for the given mode.
+   *
+   * @param {string} mode - Loop mode, either "duration" or "datetime".
+   * @param {Object|null} [existingConfig=null] - Existing loop configuration used as defaults when form fields are absent.
+   * @param {number|null} [referenceMs=null] - Reference timestamp (milliseconds) used to derive sensible defaults when sanitizing datetime-mode configs.
+   * @returns {Object} A sanitized loop configuration object containing normalized fields such as `enabled`, `interval`, `unit`, `weeklyDays`, `monthlyMode`, `monthlyDay`, `monthlyOrdinal`, `monthlyWeekday`, and `alignStartToEnd`.
   function gatherLoopConfigFromForm(mode, existingConfig = null, referenceMs = null) {
     const existing = sanitizeLoopConfig(existingConfig, mode, referenceMs);
     const supported = mode === "duration" || mode === "datetime";
@@ -648,6 +676,11 @@
     }
   }
 
+  /**
+   * Update which monthly loop form rows are shown based on the monthly mode and control visibility.
+   *
+   * When monthly loop controls are present and visible, shows the day row if the mode is "day" and shows the ordinal/weekday row if the mode is "weekday"; hides the corresponding row(s) otherwise.
+   */
   function updateLoopingMonthlyModeFields() {
     if (!f.loopMonthlyControls) return;
     const controlsVisible = !f.loopMonthlyControls.classList.contains("invisible");
@@ -660,6 +693,11 @@
     }
   }
 
+  /**
+   * Update visibility of loop-related form controls based on whether datetime fields are shown and the selected loop unit.
+   *
+   * Shows the weekly-day controls when datetime loop fields are visible and the unit is "week"; shows the monthly controls when datetime loop fields are visible and the unit is "month". Hides monthly sub-rows (day / ordinal) when monthly controls are hidden, and invokes updateLoopingMonthlyModeFields() when monthly controls are shown to refresh monthly-specific subfields.
+   */
   function updateLoopingUnitFields() {
     if (!f.loopDatetimeFields) return;
     const datetimeVisible = !f.loopDatetimeFields.classList.contains("invisible");
@@ -680,6 +718,14 @@
     }
   }
 
+  /**
+   * Update visibility and state of loop-related editor controls based on the current mode and feature availability.
+   *
+   * Shows the duration-specific loop note only when looping is enabled and the editor mode is "duration", and shows
+   * datetime-specific loop fields and the align-start row only when looping is enabled and the editor mode is "datetime".
+   * If looping is not enabled or not supported for the current mode, related datetime controls are hidden. Also refreshes
+   * unit-specific looping controls.
+   */
   function updateLoopingFieldsForMode() {
     if (!f.loopDetails) return;
     const loopsAvailable = isLoopsFeatureEnabled();
@@ -1126,6 +1172,20 @@
     return day;
   }
 
+  /**
+   * Compute the next loop target timestamp based on a previous target and loop configuration.
+   *
+   * Uses the configured unit and interval to advance from previousTargetMs, preserving the time-of-day.
+   * - unit "week": advances to the next active weekday from `config.weeklyDays` (normalized to 0-6), or advances by `interval` weeks if no later active day exists.
+   * - unit "month": advances by `interval` months and selects the day according to `config.monthlyMode` ("weekday" uses `monthlyWeekday`/`monthlyOrdinal`, otherwise uses `monthlyDay` clamped to the month's length).
+   * - unit "year": advances by `interval` years.
+   * - unit "day" (default): advances by `interval` days.
+   * If previousTargetMs cannot be parsed as a valid date, the function falls back to Number(previousTargetMs) or the current time and advances by `Math.max(1, config.interval)` days.
+   *
+   * @param {(number|string|Date)} previousTargetMs - Prior target time (ms since epoch, date string, or Date). If invalid, a numeric fallback or now() is used.
+   * @param {Object} config - Loop configuration. Expected fields: `interval` (number), `unit` (string: "day"|"week"|"month"|"year"), and unit-specific fields such as `weeklyDays`, `monthlyMode`, `monthlyDay`, `monthlyWeekday`, `monthlyOrdinal`.
+   * @returns {number} The next target time as milliseconds since the epoch.
+   */
   function addLoopInterval(previousTargetMs, config){
     const baseDate = new Date(Number(previousTargetMs));
     if (!Number.isFinite(baseDate.getTime())){
@@ -1210,6 +1270,17 @@
     return candidate;
   }
 
+  /**
+   * Restart a looped timer by computing and applying its next loop state.
+   *
+   * Mutates the provided timer object with updated loop-related fields (start, duration/total0, targetMs for datetime mode,
+   * loopCount, cleared pause state, trigger maps, and recalculated multi-bar plan). If the timer is not loop-enabled or the
+   * next target cannot be determined, no changes are applied.
+   *
+   * @param {Object} t - Timer object to restart; modified in place.
+   * @param {number} total - Fallback total duration in milliseconds used when computed totals are invalid.
+   * @returns {boolean} `true` if the timer was successfully advanced to the next loop, `false` otherwise.
+   */
   function handleLoopRestart(t, total){
     if (!timerLoopsEnabled(t)) return false;
     const nowTs = now();
@@ -1653,6 +1724,14 @@
     if (isLetters) updateLettersPreview();
   }
 
+  /**
+   * Open the timer editor and populate its fields from an existing timer or a template, or prepare a new blank timer.
+   * 
+   * Populates form controls (mode, style, colors, units, format, duration/datetime fields, loop settings, triggers, smart fields, etc.), initializes UI state (pro-mode enforcement, custom format visibility, loop weekly/align selections, letters preview), and then displays the editor dialog.
+   * 
+   * @param {string|null} [id] - ID of an existing timer to edit; when provided the editor is populated from that timer. Pass `null` to create a new timer.
+   * @param {Object|null} [template] - Template object to use as defaults when creating a new timer; ignored when `id` is provided.
+   */
   function openEditor(id=null, template=null){
     $("#dialogTitle").textContent = id ? "Edit Timer" : (template ? "New from Template" : "New Timer");
     editId = id;
@@ -2495,6 +2574,14 @@
     return preview;
   }
 
+  /**
+   * Build a DOM "card" element representing a timer, including its visual, controls, badges, and footer.
+   *
+   * Renders the timer's chosen style (ring, pie, multibar, letters, bar, color preview, or plain), applies pro-split part visuals when requested, wires the card action buttons (pause/edit/delete/prestige/save template), and updates visual accents and progress indicators.
+   *
+   * @param {Object} t - Timer object containing rendering state (id, name, style, mode, units, start, duration, targetMs, loopCount, paused, color, etc.). The function reads the timer's properties but does not mutate unrelated external state except when action buttons are used.
+   * @param {string|null} splitStyle - Optional pro split part identifier (e.g., "color", "multibar", "letters") to render only that split's visuals; pass null to render the timer's normal style.
+   * @return {HTMLElement} The root `.card` element ready for insertion into the DOM.
   function createTimerCard(t, splitStyle=null){
     const fallbackStyle = t.style || "bar";
     const displayStyle = splitStyle ? (splitStyle === "color" ? "color" : splitStyle) : fallbackStyle;
