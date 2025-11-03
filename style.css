@@ -70,6 +70,9 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
 .shortterm-weekday span{pointer-events:none;}
 .shortterm-weekday input:checked + span{font-weight:600; color:#2c2c7a;}
 .shortterm-weekday:focus-within{box-shadow:0 0 0 2px rgba(108,123,255,.35); border-color:#6c7bff;}
+.shortterm-interval{display:flex; align-items:center; gap:6px; flex:0 0 auto;}
+.shortterm-interval input[type="number"]{width:72px;}
+.shortterm-interval span{font-size:.9rem; color:#3a3a42;}
 .shortterm-remove{margin-left:auto;}
 .loop-note{margin-top:8px; font-size:.85rem; color:#3a3a42; flex:1 1 100%;}
 .loop-note strong{font-weight:600;}

@@ -5,6 +5,8 @@
   const now = () => Date.now();
   const pad2 = n => String(n).padStart(2, "0");
   const pad3 = n => String(n).padStart(3, "0");
+  const DAY_MS = 86400000;
+  const WEEK_MS = 7 * DAY_MS;
   const clamp = (v,a,b) => Math.min(b, Math.max(a, v));
   const uid = (p="id_") => p + Math.random().toString(36).slice(2);
   function parseTimestamp(raw) {
@@ -64,6 +66,46 @@
         const idB = typeof b.id === "string" ? b.id : "";
         return idA.localeCompare(idB);
       });
+  }
+
+  function parseFlexibleTimestamp(raw) {
+    if (raw == null) return NaN;
+    if (typeof raw === "number") {
+      return Number.isFinite(raw) ? raw : NaN;
+    }
+    if (typeof raw === "string") {
+      const trimmed = raw.trim();
+      if (!trimmed) return NaN;
+      const numeric = Number(trimmed);
+      if (Number.isFinite(numeric)) return numeric;
+      const parsed = Date.parse(trimmed);
+      return Number.isFinite(parsed) ? parsed : NaN;
+    }
+    if (typeof raw === "object") {
+      if (Object.prototype.hasOwnProperty.call(raw, "$date")) {
+        return parseFlexibleTimestamp(raw.$date);
+      }
+      if (Object.prototype.hasOwnProperty.call(raw, "$numberLong")) {
+        return parseFlexibleTimestamp(raw.$numberLong);
+      }
+      if (typeof raw.valueOf === "function" && raw.valueOf !== Object.prototype.valueOf) {
+        const value = raw.valueOf();
+        if (value !== raw) {
+          return parseFlexibleTimestamp(value);
+        }
+      }
+    }
+    return NaN;
+  }
+
+  function normalizeWeekStartTimestamp(raw) {
+    const ts = parseFlexibleTimestamp(raw);
+    if (!Number.isFinite(ts)) return NaN;
+    const dt = new Date(ts);
+    if (!Number.isFinite(dt.getTime())) return NaN;
+    dt.setHours(0, 0, 0, 0);
+    dt.setDate(dt.getDate() - dt.getDay());
+    return dt.getTime();
   }
   function normalizeColorString(str, fallback="#6c7bff"){
     if (typeof str === "string"){
@@ -561,14 +603,70 @@
       const ref = Number.isFinite(referenceMs) ? new Date(referenceMs) : new Date();
       timeValue = { hour: ref.getHours(), minute: ref.getMinutes() };
     }
+    const hour = clamp(Math.round(timeValue.hour ?? 0), 0, 23);
+    const minute = clamp(Math.round(timeValue.minute ?? 0), 0, 59);
+    const parseIntervalCandidate = value => {
+      const numeric = Number(value);
+      if (Number.isFinite(numeric)) return numeric;
+      if (typeof value === "string") {
+        const trimmed = value.trim();
+        if (!trimmed) return NaN;
+        const parsed = Number(trimmed);
+        if (Number.isFinite(parsed)) return parsed;
+      }
+      return NaN;
+    };
+    let intervalCandidate = parseIntervalCandidate(raw.intervalWeeks);
+    if (!Number.isFinite(intervalCandidate)) intervalCandidate = parseIntervalCandidate(raw.intervalEveryWeeks);
+    if (!Number.isFinite(intervalCandidate)) intervalCandidate = parseIntervalCandidate(raw.interval);
+    if (!Number.isFinite(intervalCandidate)) intervalCandidate = parseIntervalCandidate(raw.everyWeeks);
+    if (!Number.isFinite(intervalCandidate)) intervalCandidate = parseIntervalCandidate(raw.weeks);
+    if (!Number.isFinite(intervalCandidate)) intervalCandidate = parseIntervalCandidate(raw.frequency);
+    let intervalWeeks = Math.max(1, Number.isFinite(intervalCandidate) ? Math.floor(intervalCandidate) : 1);
+    if (!Number.isFinite(intervalWeeks) || intervalWeeks < 1) intervalWeeks = 1;
+    let anchorWeekStart = normalizeWeekStartTimestamp(
+      raw.anchorWeekStart ?? raw.anchorWeek ?? raw.anchorTimestamp ?? raw.anchor ?? raw.startWeek ?? raw.firstWeek ?? raw.referenceWeek
+    );
+    if (!Number.isFinite(anchorWeekStart)) {
+      const ts = parseFlexibleTimestamp(raw.timestamp ?? raw.when ?? raw.datetime ?? null);
+      if (Number.isFinite(ts)) {
+        anchorWeekStart = normalizeWeekStartTimestamp(ts);
+      }
+    }
+    if (!Number.isFinite(anchorWeekStart)) {
+      const ref = Number.isFinite(referenceMs) ? referenceMs : now();
+      const base = new Date(ref);
+      base.setSeconds(0, 0);
+      base.setHours(hour, minute, 0, 0);
+      if (base.getTime() < ref) {
+        base.setDate(base.getDate() + 1);
+      }
+      const weekdaySet = new Set(weekdays);
+      let nextCandidate = null;
+      for (let i = 0; i < 14; i++) {
+        const probe = new Date(base);
+        probe.setDate(base.getDate() + i);
+        if (weekdaySet.has(probe.getDay())) {
+          nextCandidate = probe;
+          break;
+        }
+      }
+      if (!nextCandidate) nextCandidate = base;
+      anchorWeekStart = normalizeWeekStartTimestamp(nextCandidate.getTime());
+    }
+    if (!Number.isFinite(anchorWeekStart)) {
+      anchorWeekStart = normalizeWeekStartTimestamp(now());
+    }
     return {
       id,
       label,
       type: "weekly",
       weekdays,
       weekday: weekdays[0],
-      hour: clamp(Math.round(timeValue.hour ?? 0), 0, 23),
-      minute: clamp(Math.round(timeValue.minute ?? 0), 0, 59)
+      hour,
+      minute,
+      intervalWeeks,
+      anchorWeekStart
     };
   }
 
@@ -603,6 +701,13 @@
       base.setSeconds(0, 0);
       const hour = clamp(Math.round(event.hour ?? 0), 0, 23);
       const minute = clamp(Math.round(event.minute ?? 0), 0, 59);
+      const intervalWeeks = Math.max(1, Math.floor(Number(event.intervalWeeks ?? 1)) || 1);
+      let anchorWeekStart = Number(event.anchorWeekStart);
+      if (Number.isFinite(anchorWeekStart)) {
+        anchorWeekStart = normalizeWeekStartTimestamp(anchorWeekStart);
+      } else {
+        anchorWeekStart = NaN;
+      }
       let candidates = Array.isArray(event.weekdays) ? event.weekdays.map(day => Number(day)) : [];
       candidates = candidates.filter(Number.isFinite).map(day => clamp(Math.round(day), 0, 6));
       if (!candidates.length) {
@@ -620,9 +725,41 @@
           offset = 7;
         }
         candidate.setDate(candidate.getDate() + offset);
-        const ts = candidate.getTime();
-        if (!best || ts < best) {
-          best = ts;
+        let guard = 0;
+        while (guard < 128) {
+          let candidateTime = candidate.getTime();
+          if (!Number.isFinite(candidateTime)) break;
+          if (candidateTime <= reference) {
+            candidate.setDate(candidate.getDate() + 7);
+            guard++;
+            continue;
+          }
+          if (intervalWeeks > 1) {
+            const weekStart = normalizeWeekStartTimestamp(candidateTime);
+            if (!Number.isFinite(weekStart)) break;
+            let anchor = anchorWeekStart;
+            if (!Number.isFinite(anchor)) {
+              anchor = weekStart;
+            }
+            if (weekStart < anchor) {
+              const diff = Math.ceil((anchor - weekStart) / WEEK_MS);
+              candidate.setDate(candidate.getDate() + diff * 7);
+              guard++;
+              continue;
+            }
+            const diffWeeks = Math.round((weekStart - anchor) / WEEK_MS);
+            if (diffWeeks % intervalWeeks !== 0) {
+              const weeksToAdd = intervalWeeks - (diffWeeks % intervalWeeks);
+              candidate.setDate(candidate.getDate() + weeksToAdd * 7);
+              guard++;
+              continue;
+            }
+          }
+          candidateTime = candidate.getTime();
+          if (!best || candidateTime < best) {
+            best = candidateTime;
+          }
+          break;
         }
       }
       return best;
@@ -1070,7 +1207,9 @@
       weekdays: [base.getDay()],
       weekday: base.getDay(),
       hour,
-      minute
+      minute,
+      intervalWeeks: 1,
+      anchorWeekStart: normalizeWeekStartTimestamp(base.getTime())
     };
   }
 
@@ -1101,6 +1240,8 @@
         const base = new Date();
         event.date = event.date || toLocalDateInputValue(base);
         event.timestamp = combineDateAndTime(event.date, event.hour, event.minute);
+        delete event.intervalWeeks;
+        delete event.anchorWeekStart;
       } else {
         let nextWeekdays = Array.isArray(event.weekdays) ? event.weekdays.map(day => Number(day)) : [];
         nextWeekdays = nextWeekdays.filter(Number.isFinite).map(day => clamp(Math.round(day), 0, 6));
@@ -1111,8 +1252,11 @@
         nextWeekdays = Array.from(new Set(nextWeekdays)).sort((a, b) => a - b);
         event.weekdays = nextWeekdays;
         event.weekday = event.weekdays[0];
+        const numericInterval = Math.max(1, Math.floor(Number(event.intervalWeeks ?? 1)) || 1);
+        event.intervalWeeks = Number.isFinite(numericInterval) && numericInterval > 0 ? numericInterval : 1;
         delete event.date;
         delete event.timestamp;
+        delete event.anchorWeekStart;
       }
       renderShortTermEventList();
     });
@@ -1166,6 +1310,9 @@
       initialWeekdays = Array.from(new Set(initialWeekdays)).sort((a, b) => a - b);
       event.weekdays = initialWeekdays;
       event.weekday = initialWeekdays[0];
+      let intervalWeeks = Math.max(1, Math.floor(Number(event.intervalWeeks ?? 1)) || 1);
+      if (!Number.isFinite(intervalWeeks) || intervalWeeks < 1) intervalWeeks = 1;
+      event.intervalWeeks = intervalWeeks;
 
       const weekdaysContainer = document.createElement("div");
       weekdaysContainer.className = "shortterm-weekdays";
@@ -1180,6 +1327,7 @@
         }
         event.weekdays = selected;
         event.weekday = selected[0];
+        delete event.anchorWeekStart;
         return true;
       };
       WEEKDAY_NAMES.forEach((name, index) => {
@@ -1212,9 +1360,53 @@
         if (parsed) {
           event.hour = parsed.hour;
           event.minute = parsed.minute;
+          delete event.anchorWeekStart;
         }
       });
       body.appendChild(timeInput);
+
+      const intervalContainer = document.createElement("div");
+      intervalContainer.className = "shortterm-interval";
+
+      const intervalLabel = document.createElement("span");
+      intervalLabel.textContent = "Repeat every";
+      intervalContainer.appendChild(intervalLabel);
+
+      const intervalInput = document.createElement("input");
+      intervalInput.type = "number";
+      intervalInput.min = "1";
+      intervalInput.inputMode = "numeric";
+      intervalInput.value = String(intervalWeeks);
+      intervalInput.setAttribute("aria-label", "Repeat every X weeks");
+
+      const intervalSuffix = document.createElement("span");
+      const updateIntervalSuffix = value => {
+        const display = Number.isFinite(value) ? value : 1;
+        intervalSuffix.textContent = display === 1 ? "week" : "weeks";
+      };
+      updateIntervalSuffix(intervalWeeks);
+
+      const commitInterval = () => {
+        let numeric = Math.floor(Number(intervalInput.value));
+        if (!Number.isFinite(numeric) || numeric < 1) {
+          numeric = 1;
+        }
+        intervalInput.value = String(numeric);
+        event.intervalWeeks = numeric;
+        delete event.anchorWeekStart;
+        updateIntervalSuffix(numeric);
+      };
+
+      intervalInput.addEventListener("change", commitInterval);
+      intervalInput.addEventListener("blur", commitInterval);
+      intervalInput.addEventListener("input", () => {
+        const numeric = Math.floor(Number(intervalInput.value));
+        updateIntervalSuffix(Number.isFinite(numeric) && numeric >= 1 ? numeric : 1);
+      });
+
+      intervalContainer.appendChild(intervalInput);
+      intervalContainer.appendChild(intervalSuffix);
+      body.appendChild(intervalContainer);
     }
     row.appendChild(body);
     return row;
