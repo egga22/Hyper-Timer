@@ -186,6 +186,71 @@
           </div>
         </div>
       </details>
+      <details id="loopingSection" class="invisible">
+        <summary>Looping</summary>
+        <div class="field">
+          <label class="toggle">
+            <input class="toggle-input" type="checkbox" id="f_loopEnabled">
+            <span class="toggle-label">Loop this timer</span>
+          </label>
+          <div class="note">Automatically restart this timer when it finishes.</div>
+        </div>
+        <div id="loopingDurationNote" class="note invisible">This duration timer will restart immediately after completion.</div>
+        <div id="loopingDatetimeFields" class="field-group invisible">
+          <div class="field-row">
+            <div class="field">
+              <label for="f_loopInterval">Repeat every</label>
+              <input id="f_loopInterval" type="number" min="1" value="1">
+            </div>
+            <div class="field">
+              <label for="f_loopUnit">Interval unit</label>
+              <select id="f_loopUnit">
+                <option value="day">Day(s)</option>
+                <option value="week">Week(s)</option>
+                <option value="month">Month(s)</option>
+                <option value="year">Year(s)</option>
+              </select>
+            </div>
+          </div>
+          <div id="loopingMonthlyControls" class="field-group invisible">
+            <div class="field">
+              <label for="f_loopMonthlyMode">Monthly repeat</label>
+              <select id="f_loopMonthlyMode">
+                <option value="day">On day</option>
+                <option value="weekday">On the</option>
+              </select>
+            </div>
+            <div id="loopMonthlyDayRow" class="field invisible">
+              <label for="f_loopMonthlyDay">Day of month</label>
+              <input id="f_loopMonthlyDay" type="number" min="1" max="31" value="1">
+            </div>
+            <div id="loopMonthlyOrdinalRow" class="field-row invisible">
+              <div class="field">
+                <label for="f_loopMonthlyOrdinal">Occurrence</label>
+                <select id="f_loopMonthlyOrdinal">
+                  <option value="first">First</option>
+                  <option value="second">Second</option>
+                  <option value="third">Third</option>
+                  <option value="fourth">Fourth</option>
+                  <option value="last">Last</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="f_loopMonthlyWeekday">Weekday</label>
+                <select id="f_loopMonthlyWeekday">
+                  <option value="0">Sunday</option>
+                  <option value="1">Monday</option>
+                  <option value="2">Tuesday</option>
+                  <option value="3">Wednesday</option>
+                  <option value="4">Thursday</option>
+                  <option value="5">Friday</option>
+                  <option value="6">Saturday</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+      </details>
       <div class="footer-row">
         <div class="note">Tip: long timers look great with Multi Bar. Save layouts as templates.</div>
         <div>
@@ -221,6 +286,17 @@
           <button class="btn" type="button" id="settingsLogoutBtn">Log Out</button>
         </div>
         <div class="settings-role invisible" id="settingsRoleDisplay"></div>
+        <div class="settings-section invisible" id="settingsLoopsSection">
+          <div class="settings-summary">
+            <div class="note">Loops (beta)</div>
+            <div class="settings-value">Automatically restart timers when they finish.</div>
+          </div>
+          <label class="toggle">
+            <input class="toggle-input" type="checkbox" id="settingsLoopsToggle">
+            <span class="toggle-label">Enable looping tools</span>
+          </label>
+          <div class="note">Loops are available to Owner and Beta Tester accounts.</div>
+        </div>
         <div class="settings-section invisible" id="settingsDefaultsSection">
           <div class="settings-summary">
             <div class="note">Default timer setup</div>
