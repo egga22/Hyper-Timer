@@ -64,6 +64,12 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
 .shortterm-event-body select,
 .shortterm-event-body input[type="time"],
 .shortterm-event-body input[type="date"]{flex:1 1 150px;}
+.shortterm-weekdays{display:flex; gap:6px; flex-wrap:wrap; flex:1 1 240px;}
+.shortterm-weekday{display:flex; align-items:center; gap:6px; border:1px solid #d8d8dd; border-radius:8px; padding:4px 10px; background:#fff; cursor:pointer; font-size:.85rem; user-select:none; transition:border-color .15s ease, box-shadow .15s ease;}
+.shortterm-weekday input{margin:0;}
+.shortterm-weekday span{pointer-events:none;}
+.shortterm-weekday input:checked + span{font-weight:600; color:#2c2c7a;}
+.shortterm-weekday:focus-within{box-shadow:0 0 0 2px rgba(108,123,255,.35); border-color:#6c7bff;}
 .shortterm-remove{margin-left:auto;}
 .loop-note{margin-top:8px; font-size:.85rem; color:#3a3a42; flex:1 1 100%;}
 .loop-note strong{font-weight:600;}

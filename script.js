@@ -426,7 +426,15 @@
   }
 
   function cloneShortTermEvents(list = []) {
-    return Array.isArray(list) ? list.map(ev => ({ ...ev })) : [];
+    return Array.isArray(list)
+      ? list.map(ev => {
+          const clone = { ...ev };
+          if (Array.isArray(ev.weekdays)) {
+            clone.weekdays = [...ev.weekdays];
+          }
+          return clone;
+        })
+      : [];
   }
 
   function combineDateAndTime(dateStr, hour, minute) {
@@ -495,21 +503,52 @@
         timestamp
       };
     }
-    let weekday = Number(raw.weekday ?? raw.day ?? raw.dayOfWeek ?? raw.dow);
-    if (!Number.isFinite(weekday)) {
-      const ts = parseTimestamp(raw.timestamp ?? raw.when ?? raw.datetime ?? null);
-      if (Number.isFinite(ts)) {
-        weekday = new Date(ts).getDay();
+    const candidateWeekdays = [];
+    const addWeekdayCandidate = value => {
+      if (value == null) return;
+      if (Array.isArray(value)) {
+        value.forEach(addWeekdayCandidate);
+        return;
       }
-    }
-    if (!Number.isFinite(weekday)) {
-      if (Number.isFinite(referenceMs)) {
-        weekday = new Date(referenceMs).getDay();
-      } else {
-        weekday = new Date().getDay();
+      if (typeof value === "string") {
+        const trimmed = value.trim();
+        if (!trimmed) return;
+        if (/^-?\d+$/.test(trimmed)) {
+          addWeekdayCandidate(Number(trimmed));
+          return;
+        }
+        trimmed.split(/[^0-9-]+/).forEach(part => addWeekdayCandidate(part));
+        return;
       }
+      const numeric = Number(value);
+      if (!Number.isFinite(numeric)) return;
+      candidateWeekdays.push(numeric);
+    };
+    addWeekdayCandidate(raw.weekdays);
+    addWeekdayCandidate(raw.days);
+    addWeekdayCandidate(raw.weekday);
+    addWeekdayCandidate(raw.day);
+    addWeekdayCandidate(raw.dayOfWeek);
+    addWeekdayCandidate(raw.dow);
+    if (!candidateWeekdays.length) {
+      let inferred = Number(raw.weekday ?? raw.day ?? raw.dayOfWeek ?? raw.dow);
+      if (!Number.isFinite(inferred)) {
+        const ts = parseTimestamp(raw.timestamp ?? raw.when ?? raw.datetime ?? null);
+        if (Number.isFinite(ts)) {
+          inferred = new Date(ts).getDay();
+        }
+      }
+      if (!Number.isFinite(inferred)) {
+        if (Number.isFinite(referenceMs)) {
+          inferred = new Date(referenceMs).getDay();
+        } else {
+          inferred = new Date().getDay();
+        }
+      }
+      candidateWeekdays.push(inferred);
     }
-    weekday = clamp(Math.round(weekday), 0, 6);
+    const normalizedWeekdays = Array.from(new Set(candidateWeekdays.map(value => clamp(Math.round(value), 0, 6)))).sort((a, b) => a - b);
+    const weekdays = normalizedWeekdays.length ? normalizedWeekdays : [new Date().getDay()];
     let timeValue = parseTimeOfDay(raw.time ?? raw.timeOfDay ?? { hour: raw.hour, minute: raw.minute });
     if (!timeValue) {
       const ts = parseTimestamp(raw.timestamp ?? raw.when ?? raw.datetime ?? null);
@@ -526,7 +565,8 @@
       id,
       label,
       type: "weekly",
-      weekday,
+      weekdays,
+      weekday: weekdays[0],
       hour: clamp(Math.round(timeValue.hour ?? 0), 0, 23),
       minute: clamp(Math.round(timeValue.minute ?? 0), 0, 59)
     };
@@ -561,15 +601,31 @@
     if (event.type === "weekly") {
       const base = new Date(reference);
       base.setSeconds(0, 0);
-      const candidate = new Date(base);
-      candidate.setHours(clamp(Math.round(event.hour ?? 0), 0, 23), clamp(Math.round(event.minute ?? 0), 0, 59), 0, 0);
-      const baseDay = candidate.getDay();
-      let offset = (Number(event.weekday ?? 0) - baseDay + 7) % 7;
-      if (offset === 0 && candidate.getTime() <= reference) {
-        offset = 7;
+      const hour = clamp(Math.round(event.hour ?? 0), 0, 23);
+      const minute = clamp(Math.round(event.minute ?? 0), 0, 59);
+      let candidates = Array.isArray(event.weekdays) ? event.weekdays.map(day => Number(day)) : [];
+      candidates = candidates.filter(Number.isFinite).map(day => clamp(Math.round(day), 0, 6));
+      if (!candidates.length) {
+        const fallback = Number(event.weekday);
+        candidates = [Number.isFinite(fallback) ? clamp(Math.round(fallback), 0, 6) : base.getDay()];
       }
-      candidate.setDate(candidate.getDate() + offset);
-      return candidate.getTime();
+      const unique = Array.from(new Set(candidates));
+      let best = null;
+      for (const weekday of unique) {
+        const candidate = new Date(base);
+        candidate.setHours(hour, minute, 0, 0);
+        const baseDay = candidate.getDay();
+        let offset = (weekday - baseDay + 7) % 7;
+        if (offset === 0 && candidate.getTime() <= reference) {
+          offset = 7;
+        }
+        candidate.setDate(candidate.getDate() + offset);
+        const ts = candidate.getTime();
+        if (!best || ts < best) {
+          best = ts;
+        }
+      }
+      return best;
     }
     return null;
   }
@@ -1011,6 +1067,7 @@
       id: uid("ste_"),
       label: "New event",
       type: "weekly",
+      weekdays: [base.getDay()],
       weekday: base.getDay(),
       hour,
       minute
@@ -1045,9 +1102,15 @@
         event.date = event.date || toLocalDateInputValue(base);
         event.timestamp = combineDateAndTime(event.date, event.hour, event.minute);
       } else {
-        if (!Number.isFinite(event.weekday)) {
-          event.weekday = new Date().getDay();
+        let nextWeekdays = Array.isArray(event.weekdays) ? event.weekdays.map(day => Number(day)) : [];
+        nextWeekdays = nextWeekdays.filter(Number.isFinite).map(day => clamp(Math.round(day), 0, 6));
+        if (!nextWeekdays.length) {
+          const fallback = Number(event.weekday);
+          nextWeekdays = [Number.isFinite(fallback) ? clamp(Math.round(fallback), 0, 6) : new Date().getDay()];
         }
+        nextWeekdays = Array.from(new Set(nextWeekdays)).sort((a, b) => a - b);
+        event.weekdays = nextWeekdays;
+        event.weekday = event.weekdays[0];
         delete event.date;
         delete event.timestamp;
       }
@@ -1094,18 +1157,52 @@
       });
       body.appendChild(timeInput);
     } else {
-      const weekdaySelect = document.createElement("select");
+      let initialWeekdays = Array.isArray(event.weekdays) ? event.weekdays.map(day => Number(day)) : [];
+      initialWeekdays = initialWeekdays.filter(Number.isFinite).map(day => clamp(Math.round(day), 0, 6));
+      if (!initialWeekdays.length) {
+        const fallback = Number(event.weekday);
+        initialWeekdays = [Number.isFinite(fallback) ? clamp(Math.round(fallback), 0, 6) : new Date().getDay()];
+      }
+      initialWeekdays = Array.from(new Set(initialWeekdays)).sort((a, b) => a - b);
+      event.weekdays = initialWeekdays;
+      event.weekday = initialWeekdays[0];
+
+      const weekdaysContainer = document.createElement("div");
+      weekdaysContainer.className = "shortterm-weekdays";
+      const selectedSet = new Set(initialWeekdays);
+      const syncWeekdaysFromInputs = () => {
+        const selected = Array.from(weekdaysContainer.querySelectorAll('input[type="checkbox"]'))
+          .filter(cb => cb.checked)
+          .map(cb => clamp(Math.round(Number(cb.value)), 0, 6))
+          .sort((a, b) => a - b);
+        if (!selected.length) {
+          return false;
+        }
+        event.weekdays = selected;
+        event.weekday = selected[0];
+        return true;
+      };
       WEEKDAY_NAMES.forEach((name, index) => {
-        const option = document.createElement("option");
-        option.value = String(index);
-        option.textContent = name;
-        weekdaySelect.appendChild(option);
+        const labelEl = document.createElement("label");
+        labelEl.className = "shortterm-weekday";
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.value = String(index);
+        checkbox.checked = selectedSet.has(index);
+        checkbox.addEventListener("change", () => {
+          if (!syncWeekdaysFromInputs()) {
+            checkbox.checked = true;
+            syncWeekdaysFromInputs();
+          }
+        });
+        const span = document.createElement("span");
+        span.textContent = name.slice(0, 3);
+        labelEl.appendChild(checkbox);
+        labelEl.appendChild(span);
+        weekdaysContainer.appendChild(labelEl);
       });
-      weekdaySelect.value = String(clamp(Number(event.weekday ?? 0), 0, 6));
-      weekdaySelect.addEventListener("change", () => {
-        event.weekday = clamp(Number(weekdaySelect.value), 0, 6);
-      });
-      body.appendChild(weekdaySelect);
+      syncWeekdaysFromInputs();
+      body.appendChild(weekdaysContainer);
 
       const timeInput = document.createElement("input");
       timeInput.type = "time";
