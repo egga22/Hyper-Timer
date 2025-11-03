@@ -209,6 +209,8 @@
     loopUnit: $("#f_loopUnit"),
     loopWeeklyControls: $("#loopingWeeklyControls"),
     loopWeeklyDays: $("#f_loopWeeklyDays"),
+    loopWeekStartRow: $("#loopWeekStartRow"),
+    loopWeekStartOffset: $("#f_loopWeekStartOffset"),
     loopMonthlyMode: $("#f_loopMonthlyMode"),
     loopMonthlyDay: $("#f_loopMonthlyDay"),
     loopMonthlyOrdinal: $("#f_loopMonthlyOrdinal"),
@@ -306,6 +308,8 @@
     interval: 1,
     unit: "day",
     weeklyDays: [],
+    weekStartOffset: 0,
+    weekAnchorMs: null,
     monthlyMode: "day",
     monthlyDay: 1,
     monthlyOrdinal: "first",
@@ -827,6 +831,28 @@
     if (!weeklyDays.length) {
       weeklyDays = [clamp(refWeekday, 0, 6)];
     }
+    let weekAnchorMs = normalizeWeekStartTimestamp(
+      base.weekAnchorMs ?? base.weekAnchor ?? base.weeklyAnchor
+    );
+    if (!Number.isFinite(weekAnchorMs) && Number.isFinite(referenceMs)) {
+      weekAnchorMs = normalizeWeekStartTimestamp(referenceMs);
+    }
+    const offsetCandidates = [
+      base.weekStartOffset,
+      base.weekOffset,
+      base.weeklyOffset
+    ];
+    let weekStartOffsetRaw = 0;
+    for (const candidate of offsetCandidates) {
+      const numeric = Number(candidate);
+      if (Number.isFinite(numeric)) {
+        weekStartOffsetRaw = numeric;
+        break;
+      }
+    }
+    let weekStartOffset = Math.floor(weekStartOffsetRaw);
+    const intervalModulo = Math.max(1, interval);
+    weekStartOffset = ((weekStartOffset % intervalModulo) + intervalModulo) % intervalModulo;
     const monthlyModeRaw = typeof base.monthlyMode === "string" ? base.monthlyMode.trim().toLowerCase() : "";
     const monthlyMode = MONTHLY_MODES.has(monthlyModeRaw) ? monthlyModeRaw : "day";
     let monthlyDayRaw = Number(base.monthlyDay);
@@ -846,6 +872,8 @@
       interval,
       unit,
       weeklyDays,
+      weekStartOffset,
+      weekAnchorMs: Number.isFinite(weekAnchorMs) ? weekAnchorMs : null,
       monthlyMode,
       monthlyDay,
       monthlyOrdinal,
@@ -883,11 +911,28 @@
     }
     const unitValue = f.loopUnit ? f.loopUnit.value : existing.unit;
     const events = unitValue === "shortterm" ? cloneShortTermEvents(shortTermEventsDraft) : existing.events;
+    const reference = mode === "datetime"
+      ? (f.when && f.when.value ? parseLocalDateTime(f.when.value) : referenceMs)
+      : referenceMs;
+    let weekStartOffsetValue = existing.weekStartOffset;
+    let weekAnchorMs = existing.weekAnchorMs;
+    if (unitValue === "week") {
+      const selectedOffset = f.loopWeekStartOffset ? Number(f.loopWeekStartOffset.value) : NaN;
+      if (Number.isFinite(selectedOffset)) {
+        weekStartOffsetValue = selectedOffset;
+      }
+      const referenceWeekStart = Number.isFinite(reference) ? normalizeWeekStartTimestamp(reference) : NaN;
+      if (Number.isFinite(referenceWeekStart)) {
+        weekAnchorMs = referenceWeekStart;
+      }
+    }
     const raw = {
       enabled: f.loopEnabled ? f.loopEnabled.checked : false,
       interval: f.loopInterval ? f.loopInterval.value : existing.interval,
       unit: unitValue,
       weeklyDays,
+      weekStartOffset: weekStartOffsetValue,
+      weekAnchorMs,
       monthlyMode: f.loopMonthlyMode ? f.loopMonthlyMode.value : existing.monthlyMode,
       monthlyDay: f.loopMonthlyDay ? f.loopMonthlyDay.value : existing.monthlyDay,
       monthlyOrdinal: f.loopMonthlyOrdinal ? f.loopMonthlyOrdinal.value : existing.monthlyOrdinal,
@@ -895,9 +940,6 @@
       alignStartToEnd: f.loopAlignStart ? f.loopAlignStart.checked : existing.alignStartToEnd,
       events
     };
-    const reference = mode === "datetime"
-      ? (f.when && f.when.value ? parseLocalDateTime(f.when.value) : referenceMs)
-      : referenceMs;
     return sanitizeLoopConfig(raw, mode, reference);
   }
 
@@ -1094,6 +1136,53 @@
     }
   }
 
+  function getLoopIntervalValue() {
+    if (!f.loopInterval) return 1;
+    const numeric = Number(f.loopInterval.value);
+    if (!Number.isFinite(numeric)) return 1;
+    const floored = Math.floor(numeric);
+    return Math.max(1, floored);
+  }
+
+  function refreshWeeklyStartOptions(desiredValue = null) {
+    if (!f.loopWeekStartOffset) return;
+    const select = f.loopWeekStartOffset;
+    const interval = getLoopIntervalValue();
+    const desiredNumeric = desiredValue != null ? Number(desiredValue) : Number(select.value);
+    let normalized = Number.isFinite(desiredNumeric) ? Math.floor(desiredNumeric) : 0;
+    const modulo = Math.max(1, interval);
+    normalized = ((normalized % modulo) + modulo) % modulo;
+    select.innerHTML = "";
+    for (let i = 0; i < Math.max(1, interval); i++) {
+      const option = document.createElement("option");
+      option.value = String(i);
+      if (i === 0) {
+        option.textContent = "Start this week";
+      } else if (i === 1) {
+        option.textContent = "Start next week";
+      } else {
+        option.textContent = `Start in ${i} weeks`;
+      }
+      select.appendChild(option);
+    }
+    select.value = String(Math.min(normalized, Math.max(interval - 1, 0)));
+  }
+
+  function updateWeeklyStartVisibility() {
+    if (!f.loopWeekStartRow) return;
+    if (!f.loopDatetimeFields) return;
+    const datetimeVisible = !f.loopDatetimeFields.classList.contains("invisible");
+    const unit = f.loopUnit ? f.loopUnit.value : "day";
+    const interval = getLoopIntervalValue();
+    const show = datetimeVisible && unit === "week" && interval > 1;
+    f.loopWeekStartRow.classList.toggle("invisible", !show);
+  }
+
+  function updateWeeklyStartControls(desiredValue = null) {
+    refreshWeeklyStartOptions(desiredValue);
+    updateWeeklyStartVisibility();
+  }
+
   function updateLoopingUnitFields() {
     if (!f.loopDatetimeFields) return;
     const datetimeVisible = !f.loopDatetimeFields.classList.contains("invisible");
@@ -1120,6 +1209,7 @@
       const shouldShow = datetimeVisible && unit === "shortterm";
       f.loopShortTermSummary.classList.toggle("invisible", !shouldShow);
     }
+    updateWeeklyStartControls();
     updateShortTermSummary();
   }
 
@@ -1935,23 +2025,57 @@
           .map(num => clamp(Math.round(num), 0, 6))
         )).sort((a, b) => a - b);
         const activeDays = normalizedDays.length ? normalizedDays : [baseDate.getDay()];
-        const baseDay = baseDate.getDay();
-        let dayOffset = null;
-        for (const day of activeDays) {
-          if (day > baseDay) {
-            dayOffset = day - baseDay;
-            break;
+        const intervalWeeks = Math.max(1, Math.floor(Number(config.interval) || 1));
+        let offsetRaw = Number(config.weekStartOffset);
+        if (!Number.isFinite(offsetRaw)) offsetRaw = 0;
+        let offset = Math.floor(offsetRaw);
+        offset = ((offset % intervalWeeks) + intervalWeeks) % intervalWeeks;
+        let anchorBase = normalizeWeekStartTimestamp(config.weekAnchorMs);
+        if (!Number.isFinite(anchorBase)) {
+          anchorBase = normalizeWeekStartTimestamp(baseDate);
+        }
+        const effectiveAnchor = Number.isFinite(anchorBase)
+          ? anchorBase + offset * WEEK_MS
+          : NaN;
+        const daySet = new Set(activeDays);
+        const candidate = new Date(baseDate);
+        candidate.setDate(candidate.getDate() + 1);
+        let guard = 0;
+        let nextDate = null;
+        while (guard < 512) {
+          if (daySet.has(candidate.getDay())) {
+            if (!Number.isFinite(effectiveAnchor) || intervalWeeks <= 1) {
+              nextDate = new Date(candidate);
+              break;
+            }
+            const weekStart = normalizeWeekStartTimestamp(candidate.getTime());
+            if (Number.isFinite(weekStart)) {
+              if (weekStart < effectiveAnchor) {
+                const diff = Math.ceil((effectiveAnchor - weekStart) / WEEK_MS);
+                candidate.setDate(candidate.getDate() + diff * 7);
+                guard += diff;
+                continue;
+              }
+              const diffWeeks = Math.floor((weekStart - effectiveAnchor) / WEEK_MS);
+              if (diffWeeks % intervalWeeks === 0) {
+                nextDate = new Date(candidate);
+                break;
+              }
+              const weeksToAdd = intervalWeeks - (diffWeeks % intervalWeeks);
+              candidate.setDate(candidate.getDate() + weeksToAdd * 7);
+              guard += weeksToAdd;
+              continue;
+            }
           }
+          candidate.setDate(candidate.getDate() + 1);
+          guard++;
         }
-        if (dayOffset == null) {
-          const firstDay = activeDays[0];
-          dayOffset = config.interval * 7 - (baseDay - firstDay);
+        if (nextDate) {
+          result = nextDate;
+        } else {
+          result = new Date(baseDate);
+          result.setDate(result.getDate() + intervalWeeks * 7);
         }
-        if (!Number.isFinite(dayOffset) || dayOffset <= 0) {
-          dayOffset = config.interval * 7;
-        }
-        result = new Date(baseDate);
-        result.setDate(result.getDate() + dayOffset);
         break;
       }
       case "month": {
@@ -2514,6 +2638,7 @@
       : null;
     const sanitizedLoop = sanitizeLoopConfig(loopSource, draft.mode, loopReferenceMs);
     if (f.loopInterval) f.loopInterval.value = sanitizedLoop.interval;
+    refreshWeeklyStartOptions(sanitizedLoop.weekStartOffset);
     if (f.loopUnit) {
       suppressLoopUnitChange = true;
       if (f.loopUnit.querySelector(`option[value="${sanitizedLoop.unit}"]`)) {
@@ -3796,6 +3921,11 @@
       openShortTermDialog({ autoCreate: shortTermEventsDraft.length === 0 });
     }
   });
+  if (f.loopInterval) {
+    ["input", "change"].forEach(eventName => {
+      f.loopInterval.addEventListener(eventName, () => updateWeeklyStartControls());
+    });
+  }
   if (f.loopMonthlyMode) f.loopMonthlyMode.addEventListener('change', updateLoopingMonthlyModeFields);
   if (f.loopShortTermEditBtn) f.loopShortTermEditBtn.addEventListener('click', () => openShortTermDialog({ autoCreate: shortTermEventsDraft.length === 0 }));
   if (addShortTermWeeklyBtn) addShortTermWeeklyBtn.addEventListener('click', () => {
