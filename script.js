@@ -159,6 +159,8 @@
     loopEnabled: $("#f_loopEnabled"),
     loopInterval: $("#f_loopInterval"),
     loopUnit: $("#f_loopUnit"),
+    loopWeeklyControls: $("#loopingWeeklyControls"),
+    loopWeeklyDays: $("#f_loopWeeklyDays"),
     loopMonthlyMode: $("#f_loopMonthlyMode"),
     loopMonthlyDay: $("#f_loopMonthlyDay"),
     loopMonthlyOrdinal: $("#f_loopMonthlyOrdinal"),
@@ -168,6 +170,8 @@
     loopDurationNote: $("#loopingDurationNote"),
     loopMonthlyDayRow: $("#loopMonthlyDayRow"),
     loopMonthlyOrdinalRow: $("#loopMonthlyOrdinalRow"),
+    loopAlignRow: $("#loopingAlignRow"),
+    loopAlignStart: $("#f_loopAlignStart"),
   };
   const customFormatRow = $("#customFormatRow");
 
@@ -248,10 +252,12 @@
     enabled: false,
     interval: 1,
     unit: "day",
+    weeklyDays: [],
     monthlyMode: "day",
     monthlyDay: 1,
     monthlyOrdinal: "first",
-    monthlyWeekday: 0
+    monthlyWeekday: 0,
+    alignStartToEnd: false
   };
   const DEFAULT_PREFERENCES = {
     defaultStyle: "bar",
@@ -370,6 +376,29 @@
     const interval = Math.max(1, Number.isFinite(intervalRaw) ? Math.floor(intervalRaw) : 1);
     const unitRaw = typeof base.unit === "string" ? base.unit.trim().toLowerCase() : "";
     const unit = LOOP_INTERVAL_UNITS.has(unitRaw) ? unitRaw : "day";
+    const weeklyCandidates = [];
+    if (Array.isArray(base.weeklyDays)) {
+      weeklyCandidates.push(...base.weeklyDays);
+    } else if (typeof base.weeklyDays === "string") {
+      weeklyCandidates.push(...base.weeklyDays.split(/[^0-9-]+/));
+    } else if (base.weeklyDays != null) {
+      weeklyCandidates.push(base.weeklyDays);
+    }
+    if (weeklyCandidates.length === 0 && base.weeklyDay != null) {
+      weeklyCandidates.push(base.weeklyDay);
+    }
+    const weeklyDaysSet = new Set();
+    for (const entry of weeklyCandidates) {
+      if (typeof entry === "string" && entry.trim() === "") continue;
+      const numeric = Number(entry);
+      if (!Number.isFinite(numeric)) continue;
+      const clamped = clamp(Math.round(numeric), 0, 6);
+      weeklyDaysSet.add(clamped);
+    }
+    let weeklyDays = Array.from(weeklyDaysSet).sort((a, b) => a - b);
+    if (!weeklyDays.length) {
+      weeklyDays = [clamp(refWeekday, 0, 6)];
+    }
     const monthlyModeRaw = typeof base.monthlyMode === "string" ? base.monthlyMode.trim().toLowerCase() : "";
     const monthlyMode = MONTHLY_MODES.has(monthlyModeRaw) ? monthlyModeRaw : "day";
     let monthlyDayRaw = Number(base.monthlyDay);
@@ -380,15 +409,18 @@
     let weekdayRaw = Number(base.monthlyWeekday);
     if (!Number.isFinite(weekdayRaw)) weekdayRaw = refWeekday;
     const monthlyWeekday = clamp(Math.round(weekdayRaw), 0, 6);
+    const alignStartToEnd = mode === "datetime" && sanitizeBoolean(base.alignStartToEnd);
     return {
       ...DEFAULT_LOOP_CONFIG,
       enabled,
       interval,
       unit,
+      weeklyDays,
       monthlyMode,
       monthlyDay,
       monthlyOrdinal,
-      monthlyWeekday
+      monthlyWeekday,
+      alignStartToEnd
     };
   }
 
@@ -412,14 +444,22 @@
     if (!isLoopsFeatureEnabled()) {
       return { ...existing, enabled: false };
     }
+    const usingWeeklyUnit = (f.loopUnit ? f.loopUnit.value : existing.unit) === "week";
+    let weeklyDays = existing.weeklyDays;
+    if (f.loopWeeklyDays && usingWeeklyUnit) {
+      const inputs = $$('input[type="checkbox"]', f.loopWeeklyDays);
+      weeklyDays = inputs.filter(input => input.checked).map(input => Number(input.value));
+    }
     const raw = {
       enabled: f.loopEnabled ? f.loopEnabled.checked : false,
       interval: f.loopInterval ? f.loopInterval.value : existing.interval,
       unit: f.loopUnit ? f.loopUnit.value : existing.unit,
+      weeklyDays,
       monthlyMode: f.loopMonthlyMode ? f.loopMonthlyMode.value : existing.monthlyMode,
       monthlyDay: f.loopMonthlyDay ? f.loopMonthlyDay.value : existing.monthlyDay,
       monthlyOrdinal: f.loopMonthlyOrdinal ? f.loopMonthlyOrdinal.value : existing.monthlyOrdinal,
-      monthlyWeekday: f.loopMonthlyWeekday ? f.loopMonthlyWeekday.value : existing.monthlyWeekday
+      monthlyWeekday: f.loopMonthlyWeekday ? f.loopMonthlyWeekday.value : existing.monthlyWeekday,
+      alignStartToEnd: f.loopAlignStart ? f.loopAlignStart.checked : existing.alignStartToEnd
     };
     const reference = mode === "datetime"
       ? (f.when && f.when.value ? parseLocalDateTime(f.when.value) : referenceMs)
@@ -621,17 +661,23 @@
   }
 
   function updateLoopingUnitFields() {
-    if (!f.loopDatetimeFields || !f.loopMonthlyControls) return;
+    if (!f.loopDatetimeFields) return;
     const datetimeVisible = !f.loopDatetimeFields.classList.contains("invisible");
     const unit = f.loopUnit ? f.loopUnit.value : "day";
-    const showMonthly = datetimeVisible && unit === "month";
-    f.loopMonthlyControls.classList.toggle("invisible", !showMonthly);
-    if (!showMonthly) {
-      if (f.loopMonthlyDayRow) f.loopMonthlyDayRow.classList.add("invisible");
-      if (f.loopMonthlyOrdinalRow) f.loopMonthlyOrdinalRow.classList.add("invisible");
-      return;
+    const showWeekly = datetimeVisible && unit === "week";
+    if (f.loopWeeklyControls) {
+      f.loopWeeklyControls.classList.toggle("invisible", !showWeekly);
     }
-    updateLoopingMonthlyModeFields();
+    const showMonthly = datetimeVisible && unit === "month";
+    if (f.loopMonthlyControls) {
+      f.loopMonthlyControls.classList.toggle("invisible", !showMonthly);
+      if (!showMonthly) {
+        if (f.loopMonthlyDayRow) f.loopMonthlyDayRow.classList.add("invisible");
+        if (f.loopMonthlyOrdinalRow) f.loopMonthlyOrdinalRow.classList.add("invisible");
+      } else {
+        updateLoopingMonthlyModeFields();
+      }
+    }
   }
 
   function updateLoopingFieldsForMode() {
@@ -648,6 +694,9 @@
     }
     if (!toggleChecked && f.loopDatetimeFields) {
       f.loopDatetimeFields.classList.add("invisible");
+    }
+    if (f.loopAlignRow) {
+      f.loopAlignRow.classList.toggle("invisible", !(toggleChecked && mode === "datetime"));
     }
     updateLoopingUnitFields();
   }
@@ -1090,8 +1139,30 @@
     let result;
     switch (config.unit){
       case "week": {
+        const days = Array.isArray(config.weeklyDays) ? config.weeklyDays : [];
+        const normalizedDays = Array.from(new Set(days
+          .map(day => Number(day))
+          .filter(num => Number.isFinite(num))
+          .map(num => clamp(Math.round(num), 0, 6))
+        )).sort((a, b) => a - b);
+        const activeDays = normalizedDays.length ? normalizedDays : [baseDate.getDay()];
+        const baseDay = baseDate.getDay();
+        let dayOffset = null;
+        for (const day of activeDays) {
+          if (day > baseDay) {
+            dayOffset = day - baseDay;
+            break;
+          }
+        }
+        if (dayOffset == null) {
+          const firstDay = activeDays[0];
+          dayOffset = config.interval * 7 - (baseDay - firstDay);
+        }
+        if (!Number.isFinite(dayOffset) || dayOffset <= 0) {
+          dayOffset = config.interval * 7;
+        }
         result = new Date(baseDate);
-        result.setDate(result.getDate() + config.interval * 7);
+        result.setDate(result.getDate() + dayOffset);
         break;
       }
       case "month": {
@@ -1154,14 +1225,22 @@
       t.duration = duration;
       t.total0 = duration;
     } else if (t.mode === "datetime"){
+      const previousTarget = Number(t.targetMs);
       const nextTarget = computeNextLoopTarget(t, sanitized);
       if (!Number.isFinite(nextTarget)){
         return false;
       }
       let startMs = nowTs;
+      if (sanitized.alignStartToEnd && Number.isFinite(previousTarget)){
+        startMs = previousTarget;
+      }
       let totalMs = nextTarget - startMs;
       if (!Number.isFinite(totalMs) || totalMs <= 0){
-        totalMs = Math.max(1000, Number(total) || 1000);
+        startMs = nowTs;
+        totalMs = nextTarget - startMs;
+        if (!Number.isFinite(totalMs) || totalMs <= 0){
+          totalMs = Math.max(1000, Number(total) || 1000);
+        }
       }
       t.targetMs = nextTarget;
       t.start = startMs;
@@ -1634,6 +1713,13 @@
         f.loopUnit.selectedIndex = 0;
       }
     }
+    if (f.loopWeeklyDays) {
+      const selectedDays = new Set((sanitizedLoop.weeklyDays || []).map(day => String(clamp(Number(day), 0, 6))));
+      const inputs = $$('input[type="checkbox"]', f.loopWeeklyDays);
+      for (const input of inputs) {
+        input.checked = selectedDays.has(input.value);
+      }
+    }
     if (f.loopMonthlyMode) {
       if (f.loopMonthlyMode.querySelector(`option[value="${sanitizedLoop.monthlyMode}"]`)) {
         f.loopMonthlyMode.value = sanitizedLoop.monthlyMode;
@@ -1654,6 +1740,9 @@
       const loopsAllowed = isLoopsFeatureEnabled();
       const supportedMode = draft.mode === "duration" || draft.mode === "datetime";
       f.loopEnabled.checked = loopsAllowed && supportedMode && sanitizedLoop.enabled;
+    }
+    if (f.loopAlignStart) {
+      f.loopAlignStart.checked = !!sanitizedLoop.alignStartToEnd;
     }
 
     renderTrList(draft.triggers||[]);
@@ -2433,7 +2522,7 @@
     const nameEl = document.createElement("span");
     nameEl.textContent = t.name || "Untitled";
     title.appendChild(nameEl);
-    if (timerLoopsEnabled(t)){
+    if (timerLoopsEnabled(t) && t.mode === "duration"){
       const badgeEl = document.createElement("span");
       badgeEl.className = "badge";
       const loops = Math.max(0, Math.floor(Number(t.loopCount) || 0));
