@@ -117,6 +117,8 @@
   const settingsCustomFormat = $("#settingsCustomFormat");
   const settingsDefaultsSaveBtn = $("#settingsDefaultsSaveBtn");
   const settingsDefaultsStatus = $("#settingsDefaultsStatus");
+  const settingsLoopsSection = $("#settingsLoopsSection");
+  const settingsLoopsToggle = $("#settingsLoopsToggle");
 
   function resetAuthDialogState() {
     const submitBtn = $("#authSubmitBtn");
@@ -153,6 +155,19 @@
     startWhen: $("#f_startWhen"),
     startPct: $("#f_startPct"),
     smartMethod: $("#f_smartMethod"), smartUrl: $("#f_smartUrl"),
+    loopDetails: $("#loopingSection"),
+    loopEnabled: $("#f_loopEnabled"),
+    loopInterval: $("#f_loopInterval"),
+    loopUnit: $("#f_loopUnit"),
+    loopMonthlyMode: $("#f_loopMonthlyMode"),
+    loopMonthlyDay: $("#f_loopMonthlyDay"),
+    loopMonthlyOrdinal: $("#f_loopMonthlyOrdinal"),
+    loopMonthlyWeekday: $("#f_loopMonthlyWeekday"),
+    loopDatetimeFields: $("#loopingDatetimeFields"),
+    loopMonthlyControls: $("#loopingMonthlyControls"),
+    loopDurationNote: $("#loopingDurationNote"),
+    loopMonthlyDayRow: $("#loopMonthlyDayRow"),
+    loopMonthlyOrdinalRow: $("#loopMonthlyOrdinalRow"),
   };
   const customFormatRow = $("#customFormatRow");
 
@@ -224,11 +239,26 @@
   };
   const PRO_MODE_ROLES = new Set(["beta tester", "special access", "owner"]);
   const ADVANCED_SETTINGS_ROLES = new Set(["special access", "beta tester", "owner"]);
+  const LOOP_FEATURE_ROLES = new Set(["beta tester", "owner"]);
+  const LOOP_INTERVAL_UNITS = new Set(["day", "week", "month", "year"]);
+  const MONTHLY_MODES = new Set(["day", "weekday"]);
+  const MONTHLY_ORDINALS = ["first", "second", "third", "fourth", "last"];
+  const MONTHLY_ORDINAL_INDEX = { first: 0, second: 1, third: 2, fourth: 3, last: -1 };
+  const DEFAULT_LOOP_CONFIG = {
+    enabled: false,
+    interval: 1,
+    unit: "day",
+    monthlyMode: "day",
+    monthlyDay: 1,
+    monthlyOrdinal: "first",
+    monthlyWeekday: 0
+  };
   const DEFAULT_PREFERENCES = {
     defaultStyle: "bar",
     defaultUnits: "auto",
     autoDisplayMode: "classic",
-    defaultCustomFormat: "{HH}:{mm}:{ss}"
+    defaultCustomFormat: "{HH}:{mm}:{ss}",
+    loopsEnabled: false
   };
   const KEY_PREFERENCE_STORE = "hyperTimer_v7_prefStore";
   const KNOWN_ANIMATION_STYLES = ["none", "bar", "ring", "pie", "multibar", "letters", "color", "pro"];
@@ -264,6 +294,15 @@
   function userCanUseProMode() {
     const role = getCurrentRole().toLowerCase();
     return PRO_MODE_ROLES.has(role);
+  }
+
+  function userCanAccessLoopsFeature() {
+    const role = getCurrentRole().toLowerCase();
+    return LOOP_FEATURE_ROLES.has(role);
+  }
+
+  function isLoopsFeatureEnabled() {
+    return userCanAccessLoopsFeature() && !!userPreferences.loopsEnabled;
   }
 
   function toggleProAccessNotice(show) {
@@ -312,14 +351,80 @@
     return DEFAULT_PREFERENCES.defaultCustomFormat;
   }
 
+  function sanitizeBoolean(value) {
+    if (typeof value === "string") {
+      const normalized = value.trim().toLowerCase();
+      return normalized === "true" || normalized === "1" || normalized === "yes" || normalized === "on";
+    }
+    return value === true || value === 1;
+  }
+
+  function sanitizeLoopConfig(rawConfig, mode, referenceMs = null) {
+    const base = rawConfig && typeof rawConfig === "object" ? rawConfig : {};
+    const supported = mode === "duration" || mode === "datetime";
+    const refDate = Number.isFinite(referenceMs) ? new Date(referenceMs) : null;
+    const refDay = refDate ? refDate.getDate() : 1;
+    const refWeekday = refDate ? refDate.getDay() : 0;
+    const enabled = supported && sanitizeBoolean(base.enabled);
+    const intervalRaw = Number(base.interval);
+    const interval = Math.max(1, Number.isFinite(intervalRaw) ? Math.floor(intervalRaw) : 1);
+    const unitRaw = typeof base.unit === "string" ? base.unit.trim().toLowerCase() : "";
+    const unit = LOOP_INTERVAL_UNITS.has(unitRaw) ? unitRaw : "day";
+    const monthlyModeRaw = typeof base.monthlyMode === "string" ? base.monthlyMode.trim().toLowerCase() : "";
+    const monthlyMode = MONTHLY_MODES.has(monthlyModeRaw) ? monthlyModeRaw : "day";
+    let monthlyDayRaw = Number(base.monthlyDay);
+    if (!Number.isFinite(monthlyDayRaw)) monthlyDayRaw = refDay;
+    const monthlyDay = clamp(Math.round(monthlyDayRaw), 1, 31);
+    const monthlyOrdinalRaw = typeof base.monthlyOrdinal === "string" ? base.monthlyOrdinal.trim().toLowerCase() : "";
+    const monthlyOrdinal = MONTHLY_ORDINALS.includes(monthlyOrdinalRaw) ? monthlyOrdinalRaw : "first";
+    let weekdayRaw = Number(base.monthlyWeekday);
+    if (!Number.isFinite(weekdayRaw)) weekdayRaw = refWeekday;
+    const monthlyWeekday = clamp(Math.round(weekdayRaw), 0, 6);
+    return {
+      ...DEFAULT_LOOP_CONFIG,
+      enabled,
+      interval,
+      unit,
+      monthlyMode,
+      monthlyDay,
+      monthlyOrdinal,
+      monthlyWeekday
+    };
+  }
+
   function sanitizePreferences(prefs) {
     const base = prefs && typeof prefs === "object" ? prefs : {};
     return {
       defaultStyle: sanitizeStylePreference(base.defaultStyle),
       defaultUnits: sanitizeUnitsPreference(base.defaultUnits),
       autoDisplayMode: sanitizeAutoDisplayMode(base.autoDisplayMode ?? base.autoMode ?? base.autoUnitsMode),
-      defaultCustomFormat: sanitizeCustomFormat(base.defaultCustomFormat ?? base.customFormat)
+      defaultCustomFormat: sanitizeCustomFormat(base.defaultCustomFormat ?? base.customFormat),
+      loopsEnabled: sanitizeBoolean(base.loopsEnabled)
     };
+  }
+
+  function gatherLoopConfigFromForm(mode, existingConfig = null, referenceMs = null) {
+    const existing = sanitizeLoopConfig(existingConfig, mode, referenceMs);
+    const supported = mode === "duration" || mode === "datetime";
+    if (!supported) {
+      return { ...existing, enabled: false };
+    }
+    if (!isLoopsFeatureEnabled()) {
+      return { ...existing, enabled: false };
+    }
+    const raw = {
+      enabled: f.loopEnabled ? f.loopEnabled.checked : false,
+      interval: f.loopInterval ? f.loopInterval.value : existing.interval,
+      unit: f.loopUnit ? f.loopUnit.value : existing.unit,
+      monthlyMode: f.loopMonthlyMode ? f.loopMonthlyMode.value : existing.monthlyMode,
+      monthlyDay: f.loopMonthlyDay ? f.loopMonthlyDay.value : existing.monthlyDay,
+      monthlyOrdinal: f.loopMonthlyOrdinal ? f.loopMonthlyOrdinal.value : existing.monthlyOrdinal,
+      monthlyWeekday: f.loopMonthlyWeekday ? f.loopMonthlyWeekday.value : existing.monthlyWeekday
+    };
+    const reference = mode === "datetime"
+      ? (f.when && f.when.value ? parseLocalDateTime(f.when.value) : referenceMs)
+      : referenceMs;
+    return sanitizeLoopConfig(raw, mode, reference);
   }
 
   function getPreferenceKeyForUser(user = currentUser) {
@@ -398,10 +503,15 @@
 
   function applyPreferencesToState(prefs, { save = true } = {}) {
     userPreferences = sanitizePreferences(prefs);
+    if (!userCanAccessLoopsFeature()) {
+      userPreferences.loopsEnabled = false;
+    }
     if (save) {
       savePreferencesForCurrentUser(userPreferences);
     }
     updateDefaultSettingsSection();
+    updateLoopFeatureToggle();
+    updateLoopingSectionVisibility();
   }
 
   function gatherSelectOptions(selectEl) {
@@ -485,6 +595,74 @@
     if (!settingsCustomFormatRow || !settingsDefaultUnits) return;
     const show = settingsDefaultUnits.value === "custom";
     settingsCustomFormatRow.classList.toggle("invisible", !show);
+  }
+
+  function updateLoopFeatureToggle() {
+    if (!settingsLoopsSection || !settingsLoopsToggle) return;
+    const allowed = userCanAccessLoopsFeature();
+    settingsLoopsSection.classList.toggle("invisible", !allowed);
+    if (!allowed) {
+      settingsLoopsToggle.checked = false;
+    } else {
+      settingsLoopsToggle.checked = !!userPreferences.loopsEnabled;
+    }
+  }
+
+  function updateLoopingMonthlyModeFields() {
+    if (!f.loopMonthlyControls) return;
+    const controlsVisible = !f.loopMonthlyControls.classList.contains("invisible");
+    const mode = f.loopMonthlyMode ? f.loopMonthlyMode.value : "day";
+    if (f.loopMonthlyDayRow) {
+      f.loopMonthlyDayRow.classList.toggle("invisible", !(controlsVisible && mode === "day"));
+    }
+    if (f.loopMonthlyOrdinalRow) {
+      f.loopMonthlyOrdinalRow.classList.toggle("invisible", !(controlsVisible && mode === "weekday"));
+    }
+  }
+
+  function updateLoopingUnitFields() {
+    if (!f.loopDatetimeFields || !f.loopMonthlyControls) return;
+    const datetimeVisible = !f.loopDatetimeFields.classList.contains("invisible");
+    const unit = f.loopUnit ? f.loopUnit.value : "day";
+    const showMonthly = datetimeVisible && unit === "month";
+    f.loopMonthlyControls.classList.toggle("invisible", !showMonthly);
+    if (!showMonthly) {
+      if (f.loopMonthlyDayRow) f.loopMonthlyDayRow.classList.add("invisible");
+      if (f.loopMonthlyOrdinalRow) f.loopMonthlyOrdinalRow.classList.add("invisible");
+      return;
+    }
+    updateLoopingMonthlyModeFields();
+  }
+
+  function updateLoopingFieldsForMode() {
+    if (!f.loopDetails) return;
+    const loopsAvailable = isLoopsFeatureEnabled();
+    const mode = f.mode ? f.mode.value : "duration";
+    const supported = mode === "duration" || mode === "datetime";
+    const toggleChecked = loopsAvailable && supported && !!(f.loopEnabled && f.loopEnabled.checked);
+    if (f.loopDurationNote) {
+      f.loopDurationNote.classList.toggle("invisible", !(toggleChecked && mode === "duration"));
+    }
+    if (f.loopDatetimeFields) {
+      f.loopDatetimeFields.classList.toggle("invisible", !(toggleChecked && mode === "datetime"));
+    }
+    if (!toggleChecked && f.loopDatetimeFields) {
+      f.loopDatetimeFields.classList.add("invisible");
+    }
+    updateLoopingUnitFields();
+  }
+
+  function updateLoopingSectionVisibility() {
+    if (!f.loopDetails) return;
+    const loopsAvailable = isLoopsFeatureEnabled();
+    const mode = f.mode ? f.mode.value : "duration";
+    const supported = mode === "duration" || mode === "datetime";
+    const shouldShow = loopsAvailable && supported;
+    f.loopDetails.classList.toggle("invisible", !shouldShow);
+    if (!loopsAvailable && f.loopEnabled) {
+      f.loopEnabled.checked = false;
+    }
+    updateLoopingFieldsForMode();
   }
 
   function updateDefaultSettingsSection() {
@@ -694,6 +872,8 @@
     const out = {...t};
     out.triggers = out.triggers || [];
     out.prestigeLevel = out.prestigeLevel || 0;
+    out.loopConfig = sanitizeLoopConfig(out.loopConfig, out.mode, out.mode === "datetime" ? out.targetMs : null);
+    out.loopCount = Math.max(0, Math.floor(Number(out.loopCount) || 0));
     out.color = normalizeColorString(out.color);
     out.color2 = normalizeColorString(out.color2, out.color);
     if (out.mode === "datetime" || out.mode === "smart"){
@@ -721,6 +901,7 @@
     const out = {...tpl};
     out.color = normalizeColorString(out.color);
     out.color2 = normalizeColorString(out.color2, out.color);
+    out.loopConfig = sanitizeLoopConfig(out.loopConfig, out.mode || "duration", out.targetMs ?? null);
     if (out.style === "pro"){
       ensureProSplitState(out);
     }
@@ -870,6 +1051,137 @@
   }
 
   const easings = { linear: x => x, easeOut: x => 1 - Math.pow(1-x, 2), easeInOut: x => x<.5 ? 2*x*x : 1 - Math.pow(-2*x+2,2)/2 };
+
+  function timerLoopsEnabled(t){
+    return !!(t && t.loopConfig && t.loopConfig.enabled && (t.mode === "duration" || t.mode === "datetime"));
+  }
+
+  function daysInMonth(year, month){
+    return new Date(year, month + 1, 0).getDate();
+  }
+
+  function nthWeekdayOfMonth(year, month, weekday, ordinalKey){
+    const ordinal = MONTHLY_ORDINAL_INDEX[ordinalKey] ?? 0;
+    if (ordinal === -1){
+      const lastDay = new Date(year, month + 1, 0);
+      const diff = (lastDay.getDay() - weekday + 7) % 7;
+      return lastDay.getDate() - diff;
+    }
+    const firstDay = new Date(year, month, 1);
+    const diff = (weekday - firstDay.getDay() + 7) % 7;
+    const day = 1 + diff + ordinal * 7;
+    const maxDay = daysInMonth(year, month);
+    if (day > maxDay){
+      return nthWeekdayOfMonth(year, month, weekday, "last");
+    }
+    return day;
+  }
+
+  function addLoopInterval(previousTargetMs, config){
+    const baseDate = new Date(Number(previousTargetMs));
+    if (!Number.isFinite(baseDate.getTime())){
+      const fallback = Number(previousTargetMs) || now();
+      return fallback + Math.max(1, config.interval) * 86400000;
+    }
+    const hours = baseDate.getHours();
+    const minutes = baseDate.getMinutes();
+    const seconds = baseDate.getSeconds();
+    const milliseconds = baseDate.getMilliseconds();
+    let result;
+    switch (config.unit){
+      case "week": {
+        result = new Date(baseDate);
+        result.setDate(result.getDate() + config.interval * 7);
+        break;
+      }
+      case "month": {
+        result = new Date(baseDate);
+        result.setDate(1);
+        result.setMonth(result.getMonth() + config.interval);
+        if (config.monthlyMode === "weekday"){
+          const targetDay = nthWeekdayOfMonth(result.getFullYear(), result.getMonth(), config.monthlyWeekday, config.monthlyOrdinal);
+          result.setDate(targetDay);
+        } else {
+          const maxDay = daysInMonth(result.getFullYear(), result.getMonth());
+          const targetDay = clamp(config.monthlyDay, 1, maxDay);
+          result.setDate(targetDay);
+        }
+        break;
+      }
+      case "year": {
+        result = new Date(baseDate);
+        result.setFullYear(result.getFullYear() + config.interval);
+        break;
+      }
+      case "day":
+      default: {
+        result = new Date(baseDate);
+        result.setDate(result.getDate() + config.interval);
+        break;
+      }
+    }
+    result.setHours(hours, minutes, seconds, milliseconds);
+    return result.getTime();
+  }
+
+  function computeNextLoopTarget(t, config){
+    const baseTarget = Number(t.targetMs) || now();
+    let candidate = addLoopInterval(baseTarget, config);
+    const nowTs = now();
+    let guard = 0;
+    while (candidate <= nowTs && guard < 512){
+      candidate = addLoopInterval(candidate, config);
+      guard++;
+    }
+    if (candidate <= nowTs){
+      return addLoopInterval(nowTs, config);
+    }
+    return candidate;
+  }
+
+  function handleLoopRestart(t, total){
+    if (!timerLoopsEnabled(t)) return false;
+    const nowTs = now();
+    const sanitized = sanitizeLoopConfig(t.loopConfig, t.mode, t.mode === "datetime" ? t.targetMs : null);
+    t.loopConfig = sanitized;
+    if (t.mode === "duration"){
+      let duration = Number(t.duration || total);
+      if (!Number.isFinite(duration) || duration <= 0){
+        duration = Number(total) || 1000;
+      }
+      duration = Math.max(1, Math.round(duration));
+      t.start = nowTs;
+      t.duration = duration;
+      t.total0 = duration;
+    } else if (t.mode === "datetime"){
+      const nextTarget = computeNextLoopTarget(t, sanitized);
+      if (!Number.isFinite(nextTarget)){
+        return false;
+      }
+      let startMs = nowTs;
+      let totalMs = nextTarget - startMs;
+      if (!Number.isFinite(totalMs) || totalMs <= 0){
+        totalMs = Math.max(1000, Number(total) || 1000);
+      }
+      t.targetMs = nextTarget;
+      t.start = startMs;
+      t.total0 = totalMs;
+      delete t.startOverrideMs;
+      delete t.startOverridePct;
+    } else {
+      return false;
+    }
+    t.loopCount = Math.max(0, Math.floor(Number(t.loopCount) || 0)) + 1;
+    t.completed = false;
+    t._prevRem = t.total0;
+    t._firedMap = {};
+    t._kMap = {};
+    t.mb_plan = planMultiBar(Math.max(1000, t.total0), t.mb_bars||null, t.mb_ticks||null);
+    delete t.paused;
+    delete t.pausedAt;
+    delete t.leftWhenPaused;
+    return true;
+  }
 
   function tone(freq=880, dur=0.2, vol=0.6){
     try{
@@ -1309,6 +1621,41 @@
     }
     f.startPct.value = (draft.startOverridePct ?? "") === null ? "" : (draft.startOverridePct ?? "");
 
+    const loopSource = draft.loopConfig ?? template?.loopConfig ?? DEFAULT_LOOP_CONFIG;
+    const loopReferenceMs = draft.mode === "datetime"
+      ? (typeof draft.targetMs === "number" ? draft.targetMs : (f.when && f.when.value ? parseLocalDateTime(f.when.value) : null))
+      : null;
+    const sanitizedLoop = sanitizeLoopConfig(loopSource, draft.mode, loopReferenceMs);
+    if (f.loopInterval) f.loopInterval.value = sanitizedLoop.interval;
+    if (f.loopUnit) {
+      if (f.loopUnit.querySelector(`option[value="${sanitizedLoop.unit}"]`)) {
+        f.loopUnit.value = sanitizedLoop.unit;
+      } else if (f.loopUnit.options.length) {
+        f.loopUnit.selectedIndex = 0;
+      }
+    }
+    if (f.loopMonthlyMode) {
+      if (f.loopMonthlyMode.querySelector(`option[value="${sanitizedLoop.monthlyMode}"]`)) {
+        f.loopMonthlyMode.value = sanitizedLoop.monthlyMode;
+      } else if (f.loopMonthlyMode.options.length) {
+        f.loopMonthlyMode.selectedIndex = 0;
+      }
+    }
+    if (f.loopMonthlyDay) f.loopMonthlyDay.value = sanitizedLoop.monthlyDay;
+    if (f.loopMonthlyOrdinal) {
+      if (f.loopMonthlyOrdinal.querySelector(`option[value="${sanitizedLoop.monthlyOrdinal}"]`)) {
+        f.loopMonthlyOrdinal.value = sanitizedLoop.monthlyOrdinal;
+      } else if (f.loopMonthlyOrdinal.options.length) {
+        f.loopMonthlyOrdinal.selectedIndex = 0;
+      }
+    }
+    if (f.loopMonthlyWeekday) f.loopMonthlyWeekday.value = String(sanitizedLoop.monthlyWeekday);
+    if (f.loopEnabled) {
+      const loopsAllowed = isLoopsFeatureEnabled();
+      const supportedMode = draft.mode === "duration" || draft.mode === "datetime";
+      f.loopEnabled.checked = loopsAllowed && supportedMode && sanitizedLoop.enabled;
+    }
+
     renderTrList(draft.triggers||[]);
     f.addPctBtn.onclick = ()=> $("#trList").appendChild(trRow({type:"percent", valuePercent:25, action:"tts", ttsTemplate:"{left} left"}));
     f.addTimeBtn.onclick = ()=> $("#trList").appendChild(trRow({type:"time", valueTimeStr:"05:00", action:"sound"}));
@@ -1319,6 +1666,9 @@
         .forEach(el=> el && el.addEventListener(ev, updateLettersPreview));
     });
     updateStyleUI();
+    updateLoopingSectionVisibility();
+    updateLoopingFieldsForMode();
+    updateLoopingMonthlyModeFields();
 
     if (f.mode.value === "duration"){
       const ms = draft.duration ?? 60000;
@@ -1342,6 +1692,8 @@
       if (smartFields) smartFields.classList.toggle("invisible", !isSmart);
       if (startOverrideRow) startOverrideRow.classList.toggle("invisible", isDur);
       if (startPctRow) startPctRow.classList.toggle("invisible", isDur);
+      updateLoopingSectionVisibility();
+      updateLoopingFieldsForMode();
     }
     toggleMode();
     f.mode.addEventListener("change", toggleMode);
@@ -1373,6 +1725,8 @@
     toggleProAccessNotice(false);
     enforceProModeEligibility(false);
     updateDefaultSettingsSection();
+    updateLoopFeatureToggle();
+    updateLoopingSectionVisibility();
   }
 
   function openSettingsDialog() {
@@ -1855,6 +2209,11 @@
 
   $("#saveBtn").addEventListener("click", async (e)=>{
     e.preventDefault();
+    const existing = editId ? timers.find(x=>x.id===editId) : null;
+    const loopReferenceMs = f.mode.value === "datetime"
+      ? (f.when && f.when.value ? parseLocalDateTime(f.when.value) : existing?.targetMs ?? null)
+      : (existing?.mode === "datetime" ? existing.targetMs : null);
+    const loopConfig = gatherLoopConfigFromForm(f.mode.value, existing?.loopConfig ?? null, loopReferenceMs);
     const base = {
       id: editId || uid("t_"), name: f.name.value.trim() || "Untitled", style: f.style.value, color: f.color.value,
       color2: f.color2.value || f.color.value,
@@ -1864,14 +2223,15 @@
       ease: f.ease.value, tick: +f.tick.value || 100, ms: f.ms.value,
       mb_bars: f.mb_bars.value? Math.max(2, Math.min(5, +f.mb_bars.value)) : null,
       mb_ticks: f.mb_ticks.value? Math.max(8, Math.min(40, +f.mb_ticks.value)) : null,
-      letters_n: f.letters_n.value? Math.max(1, Math.min(7, +f.letters_n.value)) : null
+      letters_n: f.letters_n.value? Math.max(1, Math.min(7, +f.letters_n.value)) : null,
+      loopConfig,
+      loopCount: existing?.loopCount ?? 0
     };
     if (base.style === "pro" && !userCanUseProMode()) {
       toggleProAccessNotice(true);
       alert("Pro Mode is limited to Beta Tester or higher accounts.");
       return;
     }
-    const existing = editId ? timers.find(x=>x.id===base.id) : null;
     const existingMap = new Map((existing?.triggers||[]).map(e=>[e.id,e]));
     const triggers = await collectTrEntries(existingMap);
 
@@ -2073,7 +2433,13 @@
     const nameEl = document.createElement("span");
     nameEl.textContent = t.name || "Untitled";
     title.appendChild(nameEl);
-    if (t.prestigeLevel){
+    if (timerLoopsEnabled(t)){
+      const badgeEl = document.createElement("span");
+      badgeEl.className = "badge";
+      const loops = Math.max(0, Math.floor(Number(t.loopCount) || 0));
+      badgeEl.textContent = `Loops ×${loops}`;
+      title.appendChild(badgeEl);
+    } else if (t.prestigeLevel){
       const badgeEl = document.createElement("span");
       badgeEl.className = "badge";
       badgeEl.textContent = `Prestige ${t.prestigeLevel}`;
@@ -2401,17 +2767,18 @@
     const rem = Math.max(0, remainingMs(t));
     const nowTs = Date.now();
     if (t.mode === "duration"){
-      t.start = nowTs; 
-      t.duration = rem; 
+      t.start = nowTs;
+      t.duration = rem;
       t.total0 = rem;
     } else {
-      t.start = nowTs; 
+      t.start = nowTs;
       t.total0 = Math.max(0, (t.targetMs||0) - nowTs);
       delete t.startOverrideMs;
       delete t.startOverridePct;
     }
     t.mb_plan = planMultiBar(Math.max(1000, t.total0), t.mb_bars||null, t.mb_ticks||null);
     t.prestigeLevel = (t.prestigeLevel||0) + 1;
+    t.loopCount = 0;
   }
 
   function escapeHtml(str){ return String(str).replace(/[&<>"']/g, s=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;"}[s])); }
@@ -2468,13 +2835,16 @@
         else if (tr.type==="interval"){ const intMs=(tr.intervalSec*1000)||1000; const kPrev=Math.floor(ePrev/intMs), kNow=Math.floor(eNow/intMs); const last=t._kMap[tr.id]??0; if (kNow>last){ const quantRem = total - kNow*intMs; fireAction(t,tr,Math.max(0,quantRem),total); t._kMap[tr.id]=kNow; } }
       });
 
-      if (!t.completed && rem <= 0){
+      if (rem <= 0 && !t.completed){
         t.completed = true;
         if (t.doneSoundDataUrl) playDataUrl(t.doneSoundDataUrl); else tone(990,.25);
         if (t.doneTts) speak(fillTokens(t.doneTts, 0, total, t));
+        if (timerLoopsEnabled(t)) {
+          handleLoopRestart(t, total);
+        }
         updateAndSaveTimers();
       }
-      t._prevRem = rem;
+      t._prevRem = timerLoopsEnabled(t) ? remainingMs(t) : rem;
     });
     const minTick = timers.length ? Math.min(...timers.map(t=> +t.tick || 100), 100) : 100;
     setTimeout(()=> requestAnimationFrame(tick), clamp(minTick, 16, 250));
@@ -2496,6 +2866,17 @@
   if (settingsDefaultUnits) settingsDefaultUnits.addEventListener('change', handlePreferenceFieldChange);
   if (settingsAutoUnitsMode) settingsAutoUnitsMode.addEventListener('change', handlePreferenceFieldChange);
   if (settingsCustomFormat) settingsCustomFormat.addEventListener('input', handlePreferenceFieldChange);
+  if (settingsLoopsToggle) settingsLoopsToggle.addEventListener('change', () => {
+    if (!userCanAccessLoopsFeature()) {
+      settingsLoopsToggle.checked = false;
+      return;
+    }
+    const pending = sanitizePreferences({ ...userPreferences, loopsEnabled: settingsLoopsToggle.checked });
+    applyPreferencesToState(pending);
+  });
+  if (f.loopEnabled) f.loopEnabled.addEventListener('change', updateLoopingFieldsForMode);
+  if (f.loopUnit) f.loopUnit.addEventListener('change', updateLoopingFieldsForMode);
+  if (f.loopMonthlyMode) f.loopMonthlyMode.addEventListener('change', updateLoopingMonthlyModeFields);
   if (settingsDefaultsSaveBtn) settingsDefaultsSaveBtn.addEventListener('click', async () => {
     await handlePreferencesSave();
   });
