@@ -1432,6 +1432,8 @@
             checkbox.checked = true;
             syncWeekdaysFromInputs();
           }
+          refreshStartWeekSelection();
+          commitStartWeek();
         });
         const span = document.createElement("span");
         span.textContent = name.slice(0, 3);
@@ -1451,6 +1453,8 @@
           event.hour = parsed.hour;
           event.minute = parsed.minute;
           delete event.anchorWeekStart;
+          refreshStartWeekSelection();
+          commitStartWeek();
         }
       });
       body.appendChild(timeInput);
@@ -1474,7 +1478,94 @@
         const display = Number.isFinite(value) ? value : 1;
         intervalSuffix.textContent = display === 1 ? "week" : "weeks";
       };
+
+      const getIntervalWeeks = () => {
+        let numeric = Math.floor(Number(intervalInput.value));
+        if (!Number.isFinite(numeric) || numeric < 1) {
+          numeric = Math.floor(Number(event.intervalWeeks ?? intervalWeeks));
+        }
+        if (!Number.isFinite(numeric) || numeric < 1) {
+          numeric = 1;
+        }
+        return numeric;
+      };
+
+      const startWeekContainer = document.createElement("div");
+      startWeekContainer.className = "shortterm-weekstart";
+
+      const startWeekLabel = document.createElement("span");
+      startWeekLabel.textContent = "Start on";
+      startWeekContainer.appendChild(startWeekLabel);
+
+      const startWeekSelect = document.createElement("select");
+      startWeekSelect.setAttribute("aria-label", "Select which week the rotation starts");
+      startWeekContainer.appendChild(startWeekSelect);
+
+      const computeStartWeekOffset = interval => {
+        if (!Number.isFinite(interval) || interval < 1) return 0;
+        const baseWeek = normalizeWeekStartTimestamp(now());
+        let anchor = Number(event.anchorWeekStart);
+        if (Number.isFinite(anchor)) {
+          anchor = normalizeWeekStartTimestamp(anchor);
+        } else {
+          anchor = NaN;
+        }
+        if (!Number.isFinite(anchor)) return 0;
+        if (anchor >= baseWeek) {
+          const diffWeeks = Math.round((anchor - baseWeek) / WEEK_MS);
+          return ((diffWeeks % interval) + interval) % interval;
+        }
+        const diffWeeks = Math.round((baseWeek - anchor) / WEEK_MS);
+        return (interval - (diffWeeks % interval)) % interval;
+      };
+
+      const refreshStartWeekSelection = () => {
+        const interval = getIntervalWeeks();
+        startWeekSelect.innerHTML = "";
+        if (interval <= 1) {
+          startWeekContainer.classList.add("invisible");
+          return;
+        }
+        startWeekContainer.classList.remove("invisible");
+        for (let i = 0; i < interval; i++) {
+          const option = document.createElement("option");
+          option.value = String(i);
+          if (i === 0) {
+            option.textContent = "Start this week";
+          } else if (i === 1) {
+            option.textContent = "Start next week";
+          } else {
+            option.textContent = `Start in ${i} weeks`;
+          }
+          startWeekSelect.appendChild(option);
+        }
+        const offset = computeStartWeekOffset(interval);
+        if (startWeekSelect.querySelector(`option[value="${offset}"]`)) {
+          startWeekSelect.value = String(offset);
+        } else {
+          startWeekSelect.value = "0";
+        }
+      };
+
+      const commitStartWeek = () => {
+        const interval = getIntervalWeeks();
+        if (interval <= 1) {
+          delete event.anchorWeekStart;
+          return;
+        }
+        let offset = Math.floor(Number(startWeekSelect.value));
+        if (!Number.isFinite(offset) || offset < 0) offset = 0;
+        if (offset >= interval) offset = interval - 1;
+        const baseWeek = normalizeWeekStartTimestamp(now());
+        const anchor = baseWeek + offset * WEEK_MS;
+        event.anchorWeekStart = anchor;
+      };
+
       updateIntervalSuffix(intervalWeeks);
+      refreshStartWeekSelection();
+      if (!Number.isFinite(Number(event.anchorWeekStart))) {
+        commitStartWeek();
+      }
 
       const commitInterval = () => {
         let numeric = Math.floor(Number(intervalInput.value));
@@ -1485,6 +1576,8 @@
         event.intervalWeeks = numeric;
         delete event.anchorWeekStart;
         updateIntervalSuffix(numeric);
+        refreshStartWeekSelection();
+        commitStartWeek();
       };
 
       intervalInput.addEventListener("change", commitInterval);
@@ -1492,11 +1585,18 @@
       intervalInput.addEventListener("input", () => {
         const numeric = Math.floor(Number(intervalInput.value));
         updateIntervalSuffix(Number.isFinite(numeric) && numeric >= 1 ? numeric : 1);
+        refreshStartWeekSelection();
+      });
+
+      startWeekSelect.addEventListener("change", () => {
+        commitStartWeek();
+        refreshStartWeekSelection();
       });
 
       intervalContainer.appendChild(intervalInput);
       intervalContainer.appendChild(intervalSuffix);
       body.appendChild(intervalContainer);
+      body.appendChild(startWeekContainer);
     }
     row.appendChild(body);
     return row;
