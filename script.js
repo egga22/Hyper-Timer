@@ -2058,7 +2058,7 @@
   }
 
   function formatAutoByMode(S, showMs, mode){
-    if (mode === "verbose") return formatAutoVerbose(S, showMs);
+    if (mode === "Standard") return formatAutoVerbose(S, showMs);
     return formatAutoClassic(S, showMs);
   }
   function fmt(t, units="auto", showMs=false, tmpl=null, name=""){
