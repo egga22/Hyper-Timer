@@ -320,14 +320,14 @@
   const DEFAULT_PREFERENCES = {
     defaultStyle: "bar",
     defaultUnits: "auto",
-    autoDisplayMode: "classic",
+    autoDisplayMode: "Standard",
     defaultCustomFormat: "{HH}:{mm}:{ss}",
     loopsEnabled: false
   };
   const KEY_PREFERENCE_STORE = "hyperTimer_v7_prefStore";
   const KNOWN_ANIMATION_STYLES = ["none", "bar", "ring", "pie", "multibar", "letters", "color", "pro"];
   const KNOWN_UNIT_CHOICES = ["auto", "d", "dhm", "hms", "ms", "s", "custom"];
-  const KNOWN_AUTO_MODES = ["classic", "verbose"];
+  const KNOWN_AUTO_MODES = ["Standard", "Verbose"];
   let userPreferences = { ...DEFAULT_PREFERENCES };
   let cloudAccountMissing = false;
   let lastPreferenceStatus = { message: "", tone: "neutral" };
