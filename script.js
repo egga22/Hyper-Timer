@@ -273,6 +273,64 @@
   }
   toggleProAccessNotice(false);
 
+  let shortTermOptionTemplate = null;
+  let shortTermOptionIndex = -1;
+  if (f.loopUnit) {
+    const existingShortTermOption = f.loopUnit.querySelector('option[value="shortterm"]');
+    if (existingShortTermOption) {
+      shortTermOptionTemplate = existingShortTermOption.cloneNode(true);
+      shortTermOptionIndex = Array.from(f.loopUnit.options).indexOf(existingShortTermOption);
+    }
+  }
+
+  function ensureShortTermOptionPresent() {
+    if (!f.loopUnit || !shortTermOptionTemplate) return null;
+    let option = f.loopUnit.querySelector('option[value="shortterm"]');
+    if (option) return option;
+    const newOption = shortTermOptionTemplate.cloneNode(true);
+    const options = Array.from(f.loopUnit.options);
+    const insertionIndex = Math.min(
+      shortTermOptionIndex < 0 ? options.length : shortTermOptionIndex,
+      options.length
+    );
+    if (insertionIndex >= options.length) {
+      f.loopUnit.appendChild(newOption);
+    } else {
+      f.loopUnit.insertBefore(newOption, options[insertionIndex]);
+    }
+    return newOption;
+  }
+
+  function enforceShortTermScheduleAvailability() {
+    if (!f.loopUnit) return;
+    const allowed = userCanAccessShortTermSchedule();
+    if (allowed) {
+      const option = ensureShortTermOptionPresent();
+      if (option) {
+        option.disabled = false;
+        option.hidden = false;
+        option.removeAttribute("aria-hidden");
+      }
+      return;
+    }
+    const option = f.loopUnit.querySelector('option[value="shortterm"]');
+    const wasSelected = f.loopUnit.value === "shortterm";
+    if (option) {
+      option.remove();
+    }
+    if (wasSelected) {
+      if (f.loopUnit.options.length) {
+        f.loopUnit.selectedIndex = 0;
+      }
+    }
+    if (f.loopShortTermSummary) {
+      f.loopShortTermSummary.classList.add("invisible");
+    }
+    shortTermEventsDraft = [];
+    shortTermDialogEvents = [];
+    updateLoopingUnitFields();
+  }
+
   let timers = [];
   let templates = [];
   let editId = null;
@@ -295,8 +353,9 @@
     standard: ROLE_STANDARD
   };
   const PRO_MODE_ROLES = new Set(["beta tester", "special access", "owner"]);
-  const ADVANCED_SETTINGS_ROLES = new Set(["special access", "beta tester", "owner"]);
-  const LOOP_FEATURE_ROLES = new Set(["beta tester", "owner"]);
+  const ADVANCED_SETTINGS_ROLES = new Set(["standard", "special access", "beta tester", "owner"]);
+  const LOOP_FEATURE_ROLES = new Set(["standard", "special access", "beta tester", "owner"]);
+  const SHORT_TERM_SCHEDULE_ROLES = new Set(["beta tester", "owner"]);
   const LOOP_INTERVAL_UNITS = new Set(["day", "week", "month", "year", "shortterm"]);
   const SHORT_TERM_TYPES = new Set(["weekly", "single"]);
   const MONTHLY_MODES = new Set(["day", "weekday"]);
@@ -322,7 +381,7 @@
     defaultUnits: "auto",
     autoDisplayMode: "Standard",
     defaultCustomFormat: "{HH}:{mm}:{ss}",
-    loopsEnabled: false
+    loopsEnabled: true
   };
   const KEY_PREFERENCE_STORE = "hyperTimer_v7_prefStore";
   const KNOWN_ANIMATION_STYLES = ["none", "bar", "ring", "pie", "multibar", "letters", "color", "pro"];
@@ -366,6 +425,11 @@
   function userCanAccessLoopsFeature() {
     const role = getCurrentRole().toLowerCase();
     return LOOP_FEATURE_ROLES.has(role);
+  }
+
+  function userCanAccessShortTermSchedule() {
+    const role = getCurrentRole().toLowerCase();
+    return SHORT_TERM_SCHEDULE_ROLES.has(role);
   }
 
   function isLoopsFeatureEnabled() {
@@ -807,7 +871,10 @@
     const intervalRaw = Number(base.interval);
     const interval = Math.max(1, Number.isFinite(intervalRaw) ? Math.floor(intervalRaw) : 1);
     const unitRaw = typeof base.unit === "string" ? base.unit.trim().toLowerCase() : "";
-    const unit = LOOP_INTERVAL_UNITS.has(unitRaw) ? unitRaw : "day";
+    const normalizedUnit = LOOP_INTERVAL_UNITS.has(unitRaw) ? unitRaw : "day";
+    const shortTermRequested = normalizedUnit === "shortterm";
+    const allowShortTerm = userCanAccessShortTermSchedule();
+    const unit = shortTermRequested && !allowShortTerm ? "day" : normalizedUnit;
     const weeklyCandidates = [];
     if (Array.isArray(base.weeklyDays)) {
       weeklyCandidates.push(...base.weeklyDays);
@@ -864,8 +931,12 @@
     if (!Number.isFinite(weekdayRaw)) weekdayRaw = refWeekday;
     const monthlyWeekday = clamp(Math.round(weekdayRaw), 0, 6);
     const alignStartToEnd = mode === "datetime" && unit !== "shortterm" && sanitizeBoolean(base.alignStartToEnd);
-    const events = unit === "shortterm" ? sanitizeShortTermEvents(base.events ?? base.schedule ?? base.shortTermEvents ?? [], referenceMs) : [];
-    const finalEnabled = unit === "shortterm" ? (enabled && events.length > 0) : enabled;
+    const events = unit === "shortterm" && allowShortTerm
+      ? sanitizeShortTermEvents(base.events ?? base.schedule ?? base.shortTermEvents ?? [], referenceMs)
+      : [];
+    const finalEnabled = unit === "shortterm"
+      ? (enabled && events.length > 0)
+      : (shortTermRequested && !allowShortTerm ? false : enabled);
     return {
       ...DEFAULT_LOOP_CONFIG,
       enabled: finalEnabled,
@@ -885,12 +956,16 @@
 
   function sanitizePreferences(prefs) {
     const base = prefs && typeof prefs === "object" ? prefs : {};
+    const loopsEnabledRaw = base.loopsEnabled;
+    const loopsEnabled = typeof loopsEnabledRaw === "undefined"
+      ? DEFAULT_PREFERENCES.loopsEnabled
+      : sanitizeBoolean(loopsEnabledRaw);
     return {
       defaultStyle: sanitizeStylePreference(base.defaultStyle),
       defaultUnits: sanitizeUnitsPreference(base.defaultUnits),
       autoDisplayMode: sanitizeAutoDisplayMode(base.autoDisplayMode ?? base.autoMode ?? base.autoUnitsMode),
       defaultCustomFormat: sanitizeCustomFormat(base.defaultCustomFormat ?? base.customFormat),
-      loopsEnabled: sanitizeBoolean(base.loopsEnabled)
+      loopsEnabled
     };
   }
 
@@ -909,8 +984,12 @@
       const inputs = $$('input[type="checkbox"]', f.loopWeeklyDays);
       weeklyDays = inputs.filter(input => input.checked).map(input => Number(input.value));
     }
-    const unitValue = f.loopUnit ? f.loopUnit.value : existing.unit;
-    const events = unitValue === "shortterm" ? cloneShortTermEvents(shortTermEventsDraft) : existing.events;
+    let unitValue = f.loopUnit ? f.loopUnit.value : existing.unit;
+    if (unitValue === "shortterm" && !userCanAccessShortTermSchedule()) {
+      unitValue = existing.unit === "shortterm" ? "day" : existing.unit;
+      if (unitValue === "shortterm") unitValue = "day";
+    }
+    const events = unitValue === "shortterm" ? cloneShortTermEvents(shortTermEventsDraft) : [];
     const reference = mode === "datetime"
       ? (f.when && f.when.value ? parseLocalDateTime(f.when.value) : referenceMs)
       : referenceMs;
@@ -1187,6 +1266,7 @@
     if (!f.loopDatetimeFields) return;
     const datetimeVisible = !f.loopDatetimeFields.classList.contains("invisible");
     const unit = f.loopUnit ? f.loopUnit.value : "day";
+    const allowShortTerm = userCanAccessShortTermSchedule();
     const showWeekly = datetimeVisible && unit === "week";
     if (f.loopWeeklyControls) {
       f.loopWeeklyControls.classList.toggle("invisible", !showWeekly);
@@ -1206,7 +1286,7 @@
       intervalField.classList.toggle('invisible', unit === "shortterm");
     }
     if (f.loopShortTermSummary) {
-      const shouldShow = datetimeVisible && unit === "shortterm";
+      const shouldShow = allowShortTerm && datetimeVisible && unit === "shortterm";
       f.loopShortTermSummary.classList.toggle("invisible", !shouldShow);
     }
     updateWeeklyStartControls();
@@ -1214,6 +1294,7 @@
   }
 
   function ensureShortTermTarget() {
+    if (!userCanAccessShortTermSchedule()) return;
     if (!f.when || !f.loopUnit || f.loopUnit.value !== "shortterm") return;
     if (!f.loopEnabled || !f.loopEnabled.checked) return;
     if (!f.mode || f.mode.value !== "datetime") return;
@@ -1231,6 +1312,10 @@
 
   function updateShortTermSummary() {
     if (!f.loopShortTermSummary || !f.loopShortTermSummaryText) return;
+    if (!userCanAccessShortTermSchedule()) {
+      f.loopShortTermSummary.classList.add("invisible");
+      return;
+    }
     if (!f.loopUnit || f.loopUnit.value !== "shortterm") return;
     const loopsAvailable = isLoopsFeatureEnabled();
     const mode = f.mode ? f.mode.value : "duration";
@@ -1626,6 +1711,7 @@
   }
 
   function openShortTermDialog({ autoCreate = false } = {}) {
+    if (!userCanAccessShortTermSchedule()) return;
     if (!shortTermDialog) return;
     shortTermDialogEvents = cloneShortTermEvents(shortTermEventsDraft);
     if (autoCreate && shortTermDialogEvents.length === 0) {
@@ -1641,6 +1727,10 @@
   }
 
   function handleShortTermSave() {
+    if (!userCanAccessShortTermSchedule()) {
+      closeShortTermDialog();
+      return;
+    }
     const sanitized = sanitizeShortTermEvents(shortTermDialogEvents);
     shortTermEventsDraft = cloneShortTermEvents(sanitized);
     closeShortTermDialog();
@@ -1682,6 +1772,7 @@
 
   function updateLoopingSectionVisibility() {
     if (!f.loopDetails) return;
+    enforceShortTermScheduleAvailability();
     const loopsAvailable = isLoopsFeatureEnabled();
     const mode = f.mode ? f.mode.value : "duration";
     const supported = mode === "duration" || mode === "datetime";
@@ -4016,6 +4107,10 @@
     updateShortTermSummary();
   });
   if (f.loopUnit) f.loopUnit.addEventListener('change', () => {
+    if (f.loopUnit.value === "shortterm" && !userCanAccessShortTermSchedule()) {
+      enforceShortTermScheduleAvailability();
+      return;
+    }
     updateLoopingFieldsForMode();
     if (!suppressLoopUnitChange && f.loopUnit.value === "shortterm") {
       openShortTermDialog({ autoCreate: shortTermEventsDraft.length === 0 });
@@ -4027,12 +4122,17 @@
     });
   }
   if (f.loopMonthlyMode) f.loopMonthlyMode.addEventListener('change', updateLoopingMonthlyModeFields);
-  if (f.loopShortTermEditBtn) f.loopShortTermEditBtn.addEventListener('click', () => openShortTermDialog({ autoCreate: shortTermEventsDraft.length === 0 }));
+  if (f.loopShortTermEditBtn) f.loopShortTermEditBtn.addEventListener('click', () => {
+    if (!userCanAccessShortTermSchedule()) return;
+    openShortTermDialog({ autoCreate: shortTermEventsDraft.length === 0 });
+  });
   if (addShortTermWeeklyBtn) addShortTermWeeklyBtn.addEventListener('click', () => {
+    if (!userCanAccessShortTermSchedule()) return;
     shortTermDialogEvents.push(createDefaultShortTermEvent("weekly"));
     renderShortTermEventList();
   });
   if (addShortTermSingleBtn) addShortTermSingleBtn.addEventListener('click', () => {
+    if (!userCanAccessShortTermSchedule()) return;
     shortTermDialogEvents.push(createDefaultShortTermEvent("single"));
     renderShortTermEventList();
   });
