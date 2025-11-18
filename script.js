@@ -139,6 +139,73 @@
   const tplBtn = $("#tplBtn");
   const pauseAllBtn = $("#pauseAllBtn");
 
+  let fallbackFullscreenCard = null;
+
+  function activeNativeFullscreenElement(){
+    return document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement || null;
+  }
+
+  async function tryEnterNativeFullscreen(card){
+    if (!card) return false;
+    const request = card.requestFullscreen || card.webkitRequestFullscreen || card.msRequestFullscreen;
+    if (!request) return false;
+    try {
+      const result = request.call(card);
+      if (result && typeof result.then === "function") {
+        await result;
+      }
+      return true;
+    } catch (err) {
+      console.warn("Failed to enter fullscreen", err);
+      return false;
+    }
+  }
+
+  async function exitNativeFullscreenIfActive(){
+    const active = activeNativeFullscreenElement();
+    if (!active) return false;
+    const exit = document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen;
+    if (!exit) return false;
+    try {
+      const result = exit.call(document);
+      if (result && typeof result.then === "function") {
+        await result;
+      }
+      return true;
+    } catch (err) {
+      console.warn("Failed to exit fullscreen", err);
+      return false;
+    }
+  }
+
+  function deactivateFallbackFullscreen(card=null){
+    const target = card || fallbackFullscreenCard;
+    if (!target) return;
+    target.classList.remove("fullscreen-fallback");
+    if (target.dataset) delete target.dataset.fullscreenFallback;
+    if (!document.querySelector(".card.fullscreen-fallback")){
+      document.body.classList.remove("has-fullscreen-fallback");
+      if (!card || card === fallbackFullscreenCard) fallbackFullscreenCard = null;
+    }
+  }
+
+  function activateFallbackFullscreen(card){
+    if (!card) return;
+    if (fallbackFullscreenCard && fallbackFullscreenCard !== card){
+      deactivateFallbackFullscreen(fallbackFullscreenCard);
+    }
+    fallbackFullscreenCard = card;
+    card.classList.add("fullscreen-fallback");
+    if (card.dataset) card.dataset.fullscreenFallback = "1";
+    document.body.classList.add("has-fullscreen-fallback");
+  }
+
+  function handleEscapeForFallback(ev){
+    if (ev.key === "Escape") deactivateFallbackFullscreen();
+  }
+
+  document.addEventListener("keydown", handleEscapeForFallback);
+
   const settingsBtn = $("#settingsBtn");
   const settingsDialog = $("#settingsDialog");
   const settingsSignedOut = $("#settingsSignedOut");
@@ -3638,7 +3705,8 @@
     const actions = document.createElement("div");
     actions.className = "actions";
     const pauseBtn = (t.mode==="datetime" || t.mode==="smart") ? "" : `<button class="action-btn" data-act="pause" title="${t.paused?'Resume':'Pause'}">⏯︎</button>`;
-    actions.innerHTML = `${pauseBtn}<button class="action-btn" data-act="prestige" title="Prestige">★</button><button class="action-btn" data-act="tplsave" title="Save template">⇪</button><button class="action-btn" data-act="edit" title="Edit">✎</button><button class="action-btn" data-act="delete" title="Delete">🗑</button>`;
+    const fullscreenBtn = `<button class="action-btn" data-act="fullscreen" title="Fullscreen">⛶</button>`;
+    actions.innerHTML = `${pauseBtn}${fullscreenBtn}<button class="action-btn" data-act="prestige" title="Prestige">★</button><button class="action-btn" data-act="tplsave" title="Save template">⇪</button><button class="action-btn" data-act="edit" title="Edit">✎</button><button class="action-btn" data-act="delete" title="Delete">🗑</button>`;
     card.appendChild(actions);
 
     const title = document.createElement("div");
@@ -3754,6 +3822,23 @@
         if (t.paused){ t.pausedAt = Date.now(); t.leftWhenPaused = remNow; }
         else { const delta = Date.now() - (t.pausedAt||Date.now()); if (t.mode==="duration"){ t.start += delta; } else { t.targetMs += delta; } delete t.pausedAt; }
         render();
+      } else if (act==="fullscreen"){
+        ev.preventDefault();
+        const activeNative = activeNativeFullscreenElement();
+        if (card.classList.contains("fullscreen-fallback")){
+          deactivateFallbackFullscreen(card);
+          return;
+        }
+        if (activeNative && activeNative !== card){
+          await exitNativeFullscreenIfActive();
+        } else if (activeNative === card){
+          await exitNativeFullscreenIfActive();
+          return;
+        }
+        const success = await tryEnterNativeFullscreen(card);
+        if (!success){
+          activateFallbackFullscreen(card);
+        }
       } else if (act==="edit"){
         openEditor(t.id);
       } else if (act==="delete"){
@@ -3782,6 +3867,7 @@
   }
 
   function render(){
+    if (fallbackFullscreenCard) deactivateFallbackFullscreen(fallbackFullscreenCard);
     grid.innerHTML = "";
     timers.sort((a,b)=> remainingMs(a) - remainingMs(b));
 
