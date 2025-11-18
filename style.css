@@ -29,21 +29,27 @@ body.has-fullscreen-fallback{overflow:hidden;}
 .card:fullscreen .actions,
 .card:-webkit-full-screen .actions,
 .card.fullscreen-fallback .actions{top:24px; right:24px; gap:10px;}
+.card:fullscreen .actions .action-btn:not([data-act="fullscreen"]),
+.card:-webkit-full-screen .actions .action-btn:not([data-act="fullscreen"]),
+.card.fullscreen-fallback .actions .action-btn:not([data-act="fullscreen"]){display:none;}
 .card:fullscreen .title,
 .card:-webkit-full-screen .title,
 .card.fullscreen-fallback .title{margin-top:0; justify-content:center; font-size:clamp(1.4rem,3vw,2rem);}
 .card:fullscreen .subtitle,
 .card:-webkit-full-screen .subtitle,
-.card.fullscreen-fallback .subtitle{font-size:clamp(.95rem,2vw,1.1rem);}
+.card.fullscreen-fallback .subtitle{display:none;}
 .card:fullscreen .big,
 .card:-webkit-full-screen .big,
-.card.fullscreen-fallback .big{font-size:clamp(52px,18vw,160px);}
+.card.fullscreen-fallback .big{font-size:clamp(38px,12vw,120px);}
 .card:fullscreen .canvaswrap,
 .card:-webkit-full-screen .canvaswrap,
-.card.fullscreen-fallback .canvaswrap{width:min(70vw,70vh); height:min(70vw,70vh);}
+.card.fullscreen-fallback .canvaswrap{width:min(82vw,82vh); height:min(82vw,82vh);}
 .card:fullscreen .footer-row,
 .card:-webkit-full-screen .footer-row,
 .card.fullscreen-fallback .footer-row{flex-direction:column; align-items:center; gap:14px;}
+.card:fullscreen .pill,
+.card:-webkit-full-screen .pill,
+.card.fullscreen-fallback .pill{display:none;}
 .card:fullscreen .loop-note,
 .card:-webkit-full-screen .loop-note,
 .card.fullscreen-fallback .loop-note{max-width:min(720px,90vw);}
