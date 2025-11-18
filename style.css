@@ -21,6 +21,32 @@ select, input{background:#171925; color:var(--text); border:1px solid rgba(255,2
 .pill{font-size:.75rem; padding:.2rem .45rem; border:1px solid rgba(255,255,255,.14); border-radius:999px; color:var(--muted)}
 .actions{position:absolute; top:10px; right:10px; display:flex; gap:6px; align-items:center}
 .action-btn{width:34px; height:34px; display:grid; place-items:center; border-radius:10px; background:#191b26; border:1px solid rgba(255,255,255,.14); cursor:pointer; font-size:16px; line-height:1;}
+body.has-fullscreen-fallback{overflow:hidden;}
+.card:fullscreen,
+.card:-webkit-full-screen,
+.card.fullscreen-fallback{border-radius:0; width:100vw; height:100vh; max-width:none; max-height:none; padding:min(6vh,48px); display:flex; flex-direction:column; justify-content:center; gap:18px; margin:0; align-items:center; text-align:center; box-sizing:border-box;}
+.card.fullscreen-fallback{position:fixed; inset:0; z-index:200;}
+.card:fullscreen .actions,
+.card:-webkit-full-screen .actions,
+.card.fullscreen-fallback .actions{top:24px; right:24px; gap:10px;}
+.card:fullscreen .title,
+.card:-webkit-full-screen .title,
+.card.fullscreen-fallback .title{margin-top:0; justify-content:center; font-size:clamp(1.4rem,3vw,2rem);}
+.card:fullscreen .subtitle,
+.card:-webkit-full-screen .subtitle,
+.card.fullscreen-fallback .subtitle{font-size:clamp(.95rem,2vw,1.1rem);}
+.card:fullscreen .big,
+.card:-webkit-full-screen .big,
+.card.fullscreen-fallback .big{font-size:clamp(52px,18vw,160px);}
+.card:fullscreen .canvaswrap,
+.card:-webkit-full-screen .canvaswrap,
+.card.fullscreen-fallback .canvaswrap{width:min(70vw,70vh); height:min(70vw,70vh);}
+.card:fullscreen .footer-row,
+.card:-webkit-full-screen .footer-row,
+.card.fullscreen-fallback .footer-row{flex-direction:column; align-items:center; gap:14px;}
+.card:fullscreen .loop-note,
+.card:-webkit-full-screen .loop-note,
+.card.fullscreen-fallback .loop-note{max-width:min(720px,90vw);}
 .canvaswrap{margin-left:auto;margin-right:auto; display:grid; place-items:center; width:min(72vw, 260px); height:min(72vw, 260px); margin:6px auto 8px; position:relative}
 .big{font-weight:900; font-variant-numeric:tabular-nums; letter-spacing:.5px; font-size:clamp(30px, 8vw, 46px); text-align:center; margin:8px 0 2px}
 .flip{display:inline-block; padding:.28rem .5rem; border-radius:12px; background:#10121a; border:1px solid rgba(255,255,255,.08); transition:transform .2s}
