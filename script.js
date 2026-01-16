@@ -2168,13 +2168,9 @@
   function fmtCustom(tmpl, S, name, timerObj=null){
     let percentStr = "0";
     if (timerObj) {
-      const total = timerObj.total0 || baseTotal(timerObj);
-      if (total > 0) {
-        const rem = Math.max(0, remainingMs(timerObj));
-        const elapsed = Math.max(0, total - rem);
-        const percent = Math.round((elapsed / total) * 100);
-        percentStr = String(percent);
-      }
+      const progress = calculateProgress(timerObj);
+      const percent = Math.round(progress * 100);
+      percentStr = String(percent);
     }
     const map = {"{DD}":String(S.d), "{HH}":pad2(S.h), "{mm}":pad2(S.m), "{ss}":pad2(S.s), "{ms3}":pad3(S.ms),
       "{totalD}":String(S.totalD), "{totalH}":String(S.totalH), "{totalm}":String(S.totalm), "{totals}":String(S.totals),
@@ -2484,12 +2480,16 @@
   function remainingForDisplay(t){ let rem = remainingMs(t); if (t.paused){ rem = Math.max(0, Math.ceil(rem/1000)*1000); } return rem; }
   function elapsedMs(t){ const total = t.total0 || baseTotal(t); return clamp(total - remainingMs(t), 0, total); }
 
-  function visualProgress(t){
+  function calculateProgress(t){
     const total = t.total0 || baseTotal(t);
     if (total <= 0) return 1;
     const rem = Math.max(0, remainingMs(t));
     const elapsed = Math.max(0, total - rem);
-    const raw = total ? elapsed / total : 1;
+    return total ? elapsed / total : 1;
+  }
+
+  function visualProgress(t){
+    const raw = calculateProgress(t);
     const ease = easings[t.ease||"linear"] || easings.linear;
     return ease(raw);
   }
