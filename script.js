@@ -2165,10 +2165,16 @@
     const d = Math.floor(t/86400000);
     return {d,h,m,s,ms,totals,totalm:Math.floor(t/60000), totalH:Math.floor(t/3600000), totalD:Math.floor(t/86400000)};
   }
-  function fmtCustom(tmpl, S, name){
+  function fmtCustom(tmpl, S, name, timerObj=null){
+    let percentStr = "0";
+    if (timerObj) {
+      const progress = calculateProgress(timerObj);
+      const percent = Math.round(progress * 100);
+      percentStr = String(percent);
+    }
     const map = {"{DD}":String(S.d), "{HH}":pad2(S.h), "{mm}":pad2(S.m), "{ss}":pad2(S.s), "{ms3}":pad3(S.ms),
       "{totalD}":String(S.totalD), "{totalH}":String(S.totalH), "{totalm}":String(S.totalm), "{totals}":String(S.totals),
-      "{name}": name || ""};
+      "{name}": name || "", "{percent}": percentStr};
     let out = tmpl;
     for (const k in map) out = out.split(k).join(map[k]);
     return out;
@@ -2219,7 +2225,7 @@
     if (mode === "Standard") return formatAutoVerbose(S, showMs);
     return formatAutoClassic(S, showMs);
   }
-  function fmt(t, units="auto", showMs=false, tmpl=null, name=""){
+  function fmt(t, units="auto", showMs=false, tmpl=null, name="", timerObj=null){
     const S = splitTime(t);
     switch (units){
       case "d": return S.d + " day" + (S.d!==1?"s":"");
@@ -2227,7 +2233,7 @@
       case "hms": return (S.d*24+S.h)+":"+pad2(S.m)+":"+pad2(S.s) + (showMs? "."+pad3(S.ms):"");
       case "ms":  return (S.d*24*60+S.h*60+S.m)+":"+pad2(S.s) + (showMs? "."+pad3(S.ms):"");
       case "s":   return (S.d*86400+S.h*3600+S.m*60+S.s) + (showMs? "."+pad3(S.ms):"") + "s";
-      case "custom": return fmtCustom(tmpl || "{HH}:{mm}:{ss}", S, name);
+      case "custom": return fmtCustom(tmpl || "{HH}:{mm}:{ss}", S, name, timerObj);
       case "auto":
       default:{
         const mode = getAutoDisplayMode();
@@ -2474,12 +2480,16 @@
   function remainingForDisplay(t){ let rem = remainingMs(t); if (t.paused){ rem = Math.max(0, Math.ceil(rem/1000)*1000); } return rem; }
   function elapsedMs(t){ const total = t.total0 || baseTotal(t); return clamp(total - remainingMs(t), 0, total); }
 
-  function visualProgress(t){
+  function calculateProgress(t){
     const total = t.total0 || baseTotal(t);
     if (total <= 0) return 1;
     const rem = Math.max(0, remainingMs(t));
     const elapsed = Math.max(0, total - rem);
-    const raw = total ? elapsed / total : 1;
+    return total ? elapsed / total : 1;
+  }
+
+  function visualProgress(t){
+    const raw = calculateProgress(t);
     const ease = easings[t.ease||"linear"] || easings.linear;
     return ease(raw);
   }
@@ -2793,8 +2803,8 @@
   function crossedTime(prevRem, rem, targetSec){ const prevS=Math.ceil(prevRem/1000), nowS=Math.ceil(rem/1000); return prevS>=targetSec && nowS<targetSec; }
   function fillTokens(tmpl, rem, total, t){
     const template = t.units === "custom" ? resolveCustomFormatValue(t.format) : null;
-    const left = fmt(rem, t.units, t.ms==='on', template, t.name);
-    const elapsed = fmt(Math.max(0,total-rem), t.units,false,template,t.name);
+    const left = fmt(rem, t.units, t.ms==='on', template, t.name, t);
+    const elapsed = fmt(Math.max(0,total-rem), t.units,false,template,t.name, t);
     return (tmpl||"{left} remaining").replaceAll("{left}", left).replaceAll("{elapsed}", elapsed).replaceAll("{name}", t.name||"");
   }
   function fireAction(t,tr,rem,total){ if(tr.action==="sound"){ if(tr.soundDataUrl) playDataUrl(tr.soundDataUrl); else tone(660,.18); } else { speak(fillTokens(tr.ttsTemplate, rem, total, t)); } }
@@ -3793,7 +3803,7 @@
     const foot = document.createElement("div");
     foot.className="footer-row";
     const pill = document.createElement("span"); pill.className="pill"; pill.dataset.role="accent-pill";
-    pill.textContent="Copy remaining"; pill.addEventListener("click", ()=>{ const template = t.units==='custom'?resolveCustomFormatValue(t.format):null; navigator.clipboard?.writeText(fmt(remainingMs(t), t.units, t.ms==='on', template, t.name)); pill.textContent="Copied ✓"; setTimeout(()=>pill.textContent="Copy remaining", 900);});
+    pill.textContent="Copy remaining"; pill.addEventListener("click", ()=>{ const template = t.units==='custom'?resolveCustomFormatValue(t.format):null; navigator.clipboard?.writeText(fmt(remainingMs(t), t.units, t.ms==='on', template, t.name, t)); pill.textContent="Copied ✓"; setTimeout(()=>pill.textContent="Copy remaining", 900);});
     foot.appendChild(pill);
 
     const eta = document.createElement("span"); eta.className="note";
@@ -3882,7 +3892,7 @@
     const big=document.createElement("div"); big.className="big";
     const span=document.createElement("span"); span.className="flip";
     const template = t.units==="custom" ? resolveCustomFormatValue(t.format) : null;
-    span.textContent = fmt(remainingForDisplay(t), t.units, t.ms==="on", template, t.name);
+    span.textContent = fmt(remainingForDisplay(t), t.units, t.ms==="on", template, t.name, t);
     big.appendChild(span); return big;
   }
 
@@ -4103,7 +4113,7 @@
       const cards = grid.querySelectorAll('.card[data-id="'+t.id+'"]');
       if (!cards.length) return;
       const template = t.units==="custom" ? resolveCustomFormatValue(t.format) : null;
-      const newTxt = fmt(remainingForDisplay(t), t.units, t.ms==="on", template, t.name);
+      const newTxt = fmt(remainingForDisplay(t), t.units, t.ms==="on", template, t.name, t);
       const progress = visualProgress(t);
 
       cards.forEach(card => {
