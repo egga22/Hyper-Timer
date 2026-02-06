@@ -24,7 +24,7 @@ select, input{background:#171925; color:var(--text); border:1px solid rgba(255,2
 body.has-fullscreen-fallback{overflow:hidden;}
 .card:fullscreen,
 .card:-webkit-full-screen,
-.card.fullscreen-fallback{border-radius:0; width:100vw; height:100vh; max-width:none; max-height:none; padding:min(6vh,48px); display:flex; flex-direction:column; justify-content:center; gap:18px; margin:0; align-items:center; text-align:center; box-sizing:border-box;}
+.card.fullscreen-fallback{border-radius:0; width:100vw; height:100vh; max-width:none; max-height:none; padding:min(2vh,20px) min(3vw,24px); display:flex; flex-direction:column; justify-content:center; gap:8px; margin:0; align-items:center; text-align:center; box-sizing:border-box;}
 .card.fullscreen-fallback{position:fixed; inset:0; z-index:200;}
 .card:fullscreen .actions,
 .card:-webkit-full-screen .actions,
@@ -34,16 +34,16 @@ body.has-fullscreen-fallback{overflow:hidden;}
 .card.fullscreen-fallback .actions .action-btn:not([data-act="fullscreen"]){display:none;}
 .card:fullscreen .title,
 .card:-webkit-full-screen .title,
-.card.fullscreen-fallback .title{margin-top:0; justify-content:center; font-size:clamp(1.4rem,3vw,2rem);}
+.card.fullscreen-fallback .title{margin-top:0; justify-content:center; font-size:clamp(1.1rem,2.5vw,1.6rem);}
 .card:fullscreen .subtitle,
 .card:-webkit-full-screen .subtitle,
 .card.fullscreen-fallback .subtitle{display:none;}
 .card:fullscreen .big,
 .card:-webkit-full-screen .big,
-.card.fullscreen-fallback .big{font-size:clamp(38px,12vw,120px);}
+.card.fullscreen-fallback .big{font-size:clamp(24px,4vw,52px); margin:0;}
 .card:fullscreen .canvaswrap,
 .card:-webkit-full-screen .canvaswrap,
-.card.fullscreen-fallback .canvaswrap{width:min(82vw,82vh); height:min(82vw,82vh);}
+.card.fullscreen-fallback .canvaswrap{width:min(96vw,74vh); height:min(96vw,74vh); flex-shrink:0; margin:0 auto;}
 .card:fullscreen .footer-row,
 .card:-webkit-full-screen .footer-row,
 .card.fullscreen-fallback .footer-row{flex-direction:column; align-items:center; gap:14px;}
