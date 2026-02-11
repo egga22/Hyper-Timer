@@ -108,6 +108,7 @@
           <label>Units display</label>
           <select id="f_units">
             <option value="auto">Auto</option>
+            <option value="autopct">Auto with percentage</option>
             <option value="d">Days only</option>
             <option value="dhm">Days + hours + minutes</option>
             <option value="hms">Hours:Minutes:Seconds</option>
@@ -382,6 +383,13 @@
             <label for="settingsCustomFormat">Default custom format</label>
             <input id="settingsCustomFormat" type="text" placeholder="{HH}:{mm}:{ss}">
             <div class="note">Used when Default units display is Custom.</div>
+          </div>
+          <div class="field">
+            <label class="toggle">
+              <input class="toggle-input" type="checkbox" id="settingsPercentHover">
+              <span class="toggle-label">Show time to next percent on hover</span>
+            </label>
+            <div class="note">When hovering over percentage displays, show duration until next whole percentage.</div>
           </div>
           <div class="settings-actions">
             <button class="btn primary" type="button" id="settingsDefaultsSaveBtn">Save Defaults</button>

@@ -224,6 +224,7 @@
   const settingsAutoUnitsMode = $("#settingsAutoUnitsMode");
   const settingsCustomFormatRow = $("#settingsCustomFormatRow");
   const settingsCustomFormat = $("#settingsCustomFormat");
+  const settingsPercentHover = $("#settingsPercentHover");
   const settingsDefaultsSaveBtn = $("#settingsDefaultsSaveBtn");
   const settingsDefaultsStatus = $("#settingsDefaultsStatus");
   const settingsLoopsSection = $("#settingsLoopsSection");
@@ -448,11 +449,12 @@
     defaultUnits: "auto",
     autoDisplayMode: "Standard",
     defaultCustomFormat: "{HH}:{mm}:{ss}",
-    loopsEnabled: true
+    loopsEnabled: true,
+    percentHoverEnabled: false
   };
   const KEY_PREFERENCE_STORE = "hyperTimer_v7_prefStore";
   const KNOWN_ANIMATION_STYLES = ["none", "bar", "ring", "pie", "multibar", "letters", "color", "pro"];
-  const KNOWN_UNIT_CHOICES = ["auto", "d", "dhm", "hms", "ms", "s", "custom"];
+  const KNOWN_UNIT_CHOICES = ["auto", "autopct", "d", "dhm", "hms", "ms", "s", "custom"];
   const KNOWN_AUTO_MODES = ["Standard", "Verbose"];
   let userPreferences = { ...DEFAULT_PREFERENCES };
   let cloudAccountMissing = false;
@@ -1027,12 +1029,17 @@
     const loopsEnabled = typeof loopsEnabledRaw === "undefined"
       ? DEFAULT_PREFERENCES.loopsEnabled
       : sanitizeBoolean(loopsEnabledRaw);
+    const percentHoverEnabledRaw = base.percentHoverEnabled;
+    const percentHoverEnabled = typeof percentHoverEnabledRaw === "undefined"
+      ? DEFAULT_PREFERENCES.percentHoverEnabled
+      : sanitizeBoolean(percentHoverEnabledRaw);
     return {
       defaultStyle: sanitizeStylePreference(base.defaultStyle),
       defaultUnits: sanitizeUnitsPreference(base.defaultUnits),
       autoDisplayMode: sanitizeAutoDisplayMode(base.autoDisplayMode ?? base.autoMode ?? base.autoUnitsMode),
       defaultCustomFormat: sanitizeCustomFormat(base.defaultCustomFormat ?? base.customFormat),
-      loopsEnabled
+      loopsEnabled,
+      percentHoverEnabled
     };
   }
 
@@ -1173,6 +1180,7 @@
     }
     updateDefaultSettingsSection();
     updateLoopFeatureToggle();
+    updatePercentHoverToggle();
     updateLoopingSectionVisibility();
   }
 
@@ -1268,6 +1276,11 @@
     } else {
       settingsLoopsToggle.checked = !!userPreferences.loopsEnabled;
     }
+  }
+  
+  function updatePercentHoverToggle() {
+    if (!settingsPercentHover) return;
+    settingsPercentHover.checked = !!userPreferences.percentHoverEnabled;
   }
 
   function updateLoopingMonthlyModeFields() {
@@ -2225,6 +2238,18 @@
     if (mode === "Standard") return formatAutoVerbose(S, showMs);
     return formatAutoClassic(S, showMs);
   }
+  
+  function formatAutoWithPercent(S, showMs, mode, timerObj){
+    const autoText = formatAutoByMode(S, showMs, mode);
+    let percentStr = "0";
+    if (timerObj) {
+      const progress = calculateProgress(timerObj);
+      const percent = Math.round(progress * 100);
+      percentStr = String(percent);
+    }
+    return autoText + " (" + percentStr + "%)";
+  }
+  
   function fmt(t, units="auto", showMs=false, tmpl=null, name="", timerObj=null){
     const S = splitTime(t);
     switch (units){
@@ -2234,6 +2259,10 @@
       case "ms":  return (S.d*24*60+S.h*60+S.m)+":"+pad2(S.s) + (showMs? "."+pad3(S.ms):"");
       case "s":   return (S.d*86400+S.h*3600+S.m*60+S.s) + (showMs? "."+pad3(S.ms):"") + "s";
       case "custom": return fmtCustom(tmpl || "{HH}:{mm}:{ss}", S, name, timerObj);
+      case "autopct": {
+        const mode = getAutoDisplayMode();
+        return formatAutoWithPercent(S, showMs, mode, timerObj);
+      }
       case "auto":
       default:{
         const mode = getAutoDisplayMode();
@@ -3020,6 +3049,7 @@
     enforceProModeEligibility(false);
     updateDefaultSettingsSection();
     updateLoopFeatureToggle();
+    updatePercentHoverToggle();
     updateLoopingSectionVisibility();
   }
 
@@ -3893,7 +3923,40 @@
     const span=document.createElement("span"); span.className="flip";
     const template = t.units==="custom" ? resolveCustomFormatValue(t.format) : null;
     span.textContent = fmt(remainingForDisplay(t), t.units, t.ms==="on", template, t.name, t);
+    
+    // Add hover functionality for autopct format
+    if (t.units === "autopct" && userPreferences.percentHoverEnabled) {
+      span.style.cursor = "help";
+      span.title = calculateTimeToNextPercent(t);
+    }
+    
     big.appendChild(span); return big;
+  }
+  
+  function calculateTimeToNextPercent(t) {
+    const total = t.total0 || baseTotal(t);
+    if (total <= 0) return "N/A";
+    
+    const rem = Math.max(0, remainingMs(t));
+    const elapsed = Math.max(0, total - rem);
+    const progress = total ? elapsed / total : 1;
+    const currentPercent = Math.round(progress * 100);
+    
+    // Calculate next whole percentage point
+    const nextPercent = currentPercent + 1;
+    if (nextPercent > 100) return "Timer complete";
+    
+    // Calculate time needed to reach next percent
+    const nextPercentProgress = nextPercent / 100;
+    const nextPercentElapsed = total * nextPercentProgress;
+    const timeToNext = Math.max(0, nextPercentElapsed - elapsed);
+    
+    // Format the time
+    const S = splitTime(timeToNext);
+    if (S.d > 0) return `${S.d}d ${S.h}h ${S.m}m to ${nextPercent}%`;
+    if (S.h > 0) return `${S.h}h ${S.m}m ${S.s}s to ${nextPercent}%`;
+    if (S.m > 0) return `${S.m}m ${S.s}s to ${nextPercent}%`;
+    return `${S.s}s to ${nextPercent}%`;
   }
 
   function drawVisual(cvs,t){
@@ -4201,6 +4264,11 @@
       return;
     }
     const pending = sanitizePreferences({ ...userPreferences, loopsEnabled: settingsLoopsToggle.checked });
+    applyPreferencesToState(pending);
+  });
+  
+  if (settingsPercentHover) settingsPercentHover.addEventListener('change', () => {
+    const pending = sanitizePreferences({ ...userPreferences, percentHoverEnabled: settingsPercentHover.checked });
     applyPreferencesToState(pending);
   });
   if (f.loopEnabled) f.loopEnabled.addEventListener('change', () => {
