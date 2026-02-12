@@ -3646,6 +3646,7 @@
       if (durationInSeconds > 0) {
         window.flutter_inappwebview.callHandler(
           'triggerNotification',
+          record.id,
           'Hyper Timer',
           'Your timer has finished!',
           durationInSeconds
