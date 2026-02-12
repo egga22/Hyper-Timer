@@ -3640,6 +3640,19 @@
     else timers.push(record);
     
     await updateAndSaveTimers();
+
+    if (window.flutter_inappwebview) {
+      const durationInSeconds = Math.round(remainingMs(record) / 1000);
+      if (durationInSeconds > 0) {
+        window.flutter_inappwebview.callHandler(
+          'triggerNotification',
+          'Hyper Timer',
+          'Your timer has finished!',
+          durationInSeconds
+        );
+      }
+    }
+
     if (editor.open) editor.close();
   });
 
