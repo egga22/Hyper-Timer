@@ -3931,7 +3931,22 @@
   }
 
   function render(){
-    if (fallbackFullscreenCard) deactivateFallbackFullscreen(fallbackFullscreenCard);
+    // Remember which timer and split style was in fullscreen
+    let fullscreenTimerId = null;
+    let fullscreenSplitStyle = null;
+    if (fallbackFullscreenCard) {
+      fullscreenTimerId = fallbackFullscreenCard.dataset.id;
+      fullscreenSplitStyle = fallbackFullscreenCard.dataset.proPart || null;
+      deactivateFallbackFullscreen(fallbackFullscreenCard);
+    }
+    
+    // Also check for native fullscreen
+    const nativeFS = activeNativeFullscreenElement();
+    if (nativeFS && nativeFS.classList.contains('card')) {
+      fullscreenTimerId = nativeFS.dataset.id;
+      fullscreenSplitStyle = nativeFS.dataset.proPart || null;
+    }
+    
     grid.innerHTML = "";
     timers.sort((a,b)=> remainingMs(a) - remainingMs(b));
 
@@ -3939,6 +3954,18 @@
       const cards = buildTimerCards(t);
       cards.forEach(card => grid.appendChild(card));
     });
+    
+    // Restore fullscreen if there was one
+    if (fullscreenTimerId) {
+      const selector = fullscreenSplitStyle 
+        ? `.card[data-id="${fullscreenTimerId}"][data-pro-part="${fullscreenSplitStyle}"]`
+        : `.card[data-id="${fullscreenTimerId}"]`;
+      const targetCard = grid.querySelector(selector);
+      if (targetCard && !activeNativeFullscreenElement()) {
+        // Only restore fallback fullscreen (native fullscreen can't be restored programmatically)
+        activateFallbackFullscreen(targetCard);
+      }
+    }
   }
 
   function makeCanvas(size){ const cvs=document.createElement("canvas"); cvs.width=size*2; cvs.height=size*2; cvs.style.width=size+"px"; cvs.style.height=size+"px"; return cvs; }
