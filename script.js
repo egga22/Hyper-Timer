@@ -3955,14 +3955,21 @@
       cards.forEach(card => grid.appendChild(card));
     });
     
+    // Helper to check if a card matches the expected split style
+    function matchesSplitStyle(card, expectedSplitStyle) {
+      if (expectedSplitStyle) {
+        return card.dataset.proPart === expectedSplitStyle;
+      }
+      return !card.dataset.proPart || card.dataset.proPart === '';
+    }
+    
     // Restore fullscreen if there was one
     if (fullscreenTimerId) {
       // Safely find the card by iterating through cards instead of using template literals in selectors
       const cards = Array.from(grid.querySelectorAll('.card'));
       const targetCard = cards.find(card => {
         const matchesId = card.dataset.id === fullscreenTimerId;
-        const matchesSplit = fullscreenSplitStyle ? card.dataset.proPart === fullscreenSplitStyle : !card.dataset.proPart || card.dataset.proPart === '';
-        return matchesId && matchesSplit;
+        return matchesId && matchesSplitStyle(card, fullscreenSplitStyle);
       });
       
       if (targetCard) {
