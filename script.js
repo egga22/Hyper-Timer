@@ -3957,13 +3957,21 @@
     
     // Restore fullscreen if there was one
     if (fullscreenTimerId) {
-      const selector = fullscreenSplitStyle 
-        ? `.card[data-id="${fullscreenTimerId}"][data-pro-part="${fullscreenSplitStyle}"]`
-        : `.card[data-id="${fullscreenTimerId}"]`;
-      const targetCard = grid.querySelector(selector);
-      if (targetCard && !activeNativeFullscreenElement()) {
-        // Only restore fallback fullscreen (native fullscreen can't be restored programmatically)
-        activateFallbackFullscreen(targetCard);
+      // Safely find the card by iterating through cards instead of using template literals in selectors
+      const cards = Array.from(grid.querySelectorAll('.card'));
+      const targetCard = cards.find(card => {
+        const matchesId = card.dataset.id === fullscreenTimerId;
+        const matchesSplit = fullscreenSplitStyle ? card.dataset.proPart === fullscreenSplitStyle : !card.dataset.proPart || card.dataset.proPart === '';
+        return matchesId && matchesSplit;
+      });
+      
+      if (targetCard) {
+        const currentNativeFS = activeNativeFullscreenElement();
+        // Only restore fallback fullscreen if there's no native fullscreen active at all
+        // (native fullscreen can't be restored programmatically after render)
+        if (!currentNativeFS) {
+          activateFallbackFullscreen(targetCard);
+        }
       }
     }
   }
