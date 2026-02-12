@@ -3914,9 +3914,8 @@
         if (activeNative && activeNative !== card){
           await exitNativeFullscreenIfActive();
         }
-        const otherFallback = document.querySelector(".card.fullscreen-fallback");
-        if (otherFallback && otherFallback !== card){
-          deactivateFallbackFullscreen(otherFallback);
+        if (fallbackFullscreenCard && fallbackFullscreenCard !== card){
+          deactivateFallbackFullscreen(fallbackFullscreenCard);
         }
         
         // Try to enter native fullscreen for this card
