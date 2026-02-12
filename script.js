@@ -9,6 +9,15 @@
   const WEEK_MS = 7 * DAY_MS;
   const clamp = (v,a,b) => Math.min(b, Math.max(a, v));
   const uid = (p="id_") => p + Math.random().toString(36).slice(2);
+  function stringToNotificationId(str) {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash | 0; // Convert to 32-bit integer
+    }
+    return Math.abs(hash);
+  }
   function parseTimestamp(raw) {
     if (raw == null) return 0;
     if (typeof raw === "number") {
@@ -3644,9 +3653,10 @@
     if (window.flutter_inappwebview) {
       const durationInSeconds = Math.round(remainingMs(record) / 1000);
       if (durationInSeconds > 0) {
+        const notificationId = stringToNotificationId(record.id);
         window.flutter_inappwebview.callHandler(
           'triggerNotification',
-          record.id,
+          notificationId,
           'Hyper Timer',
           'Your timer has finished!',
           durationInSeconds
