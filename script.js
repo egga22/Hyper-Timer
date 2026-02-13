@@ -190,11 +190,19 @@
   function deactivateFallbackFullscreen(card=null){
     const target = card || fallbackFullscreenCard;
     if (!target) return;
+    
+    // Remove fullscreen classes and data attributes
     target.classList.remove("fullscreen-fallback");
     if (target.dataset) delete target.dataset.fullscreenFallback;
+    
+    // Clear the global reference if this was the tracked card
+    if (target === fallbackFullscreenCard) {
+      fallbackFullscreenCard = null;
+    }
+    
+    // Remove body class if no fallback fullscreen cards remain
     if (!document.querySelector(".card.fullscreen-fallback")){
       document.body.classList.remove("has-fullscreen-fallback");
-      if (!card || card === fallbackFullscreenCard) fallbackFullscreenCard = null;
     }
   }
 
@@ -3889,18 +3897,31 @@
       } else if (act==="fullscreen"){
         ev.preventDefault();
         const activeNative = activeNativeFullscreenElement();
+        
+        // If this card is in fallback fullscreen, exit it
         if (card.classList.contains("fullscreen-fallback")){
           deactivateFallbackFullscreen(card);
           return;
         }
-        if (activeNative && activeNative !== card){
-          await exitNativeFullscreenIfActive();
-        } else if (activeNative === card){
+        
+        // If this card is in native fullscreen, exit it
+        if (activeNative === card){
           await exitNativeFullscreenIfActive();
           return;
         }
+        
+        // If another card is in native fullscreen or fallback, exit it first
+        if (activeNative && activeNative !== card){
+          await exitNativeFullscreenIfActive();
+        }
+        if (fallbackFullscreenCard && fallbackFullscreenCard !== card){
+          deactivateFallbackFullscreen(fallbackFullscreenCard);
+        }
+        
+        // Try to enter native fullscreen for this card
         const success = await tryEnterNativeFullscreen(card);
         if (!success){
+          // Fallback to CSS fullscreen if native fails
           activateFallbackFullscreen(card);
         }
       } else if (act==="edit"){
@@ -3934,17 +3955,24 @@
     // Remember which timer and split style was in fullscreen
     let fullscreenTimerId = null;
     let fullscreenSplitStyle = null;
+    let wasNativeFullscreen = false;
+    
+    // Check for fallback fullscreen first
     if (fallbackFullscreenCard) {
       fullscreenTimerId = fallbackFullscreenCard.dataset.id;
       fullscreenSplitStyle = fallbackFullscreenCard.dataset.proPart || null;
       deactivateFallbackFullscreen(fallbackFullscreenCard);
     }
     
-    // Also check for native fullscreen
+    // Check for native fullscreen (this takes priority if both exist)
     const nativeFS = activeNativeFullscreenElement();
     if (nativeFS && nativeFS.classList.contains('card')) {
       fullscreenTimerId = nativeFS.dataset.id;
       fullscreenSplitStyle = nativeFS.dataset.proPart || null;
+      wasNativeFullscreen = true;
+      // Note: When grid.innerHTML="" runs, the browser will automatically exit
+      // native fullscreen because the DOM element is destroyed. We'll restore
+      // as fallback fullscreen since we can't programmatically restore native.
     }
     
     grid.innerHTML = "";
@@ -3973,12 +4001,16 @@
       });
       
       if (targetCard) {
-        const currentNativeFS = activeNativeFullscreenElement();
-        // Only restore fallback fullscreen if there's no native fullscreen active at all
-        // (native fullscreen can't be restored programmatically after render)
-        if (!currentNativeFS) {
+        // Native fullscreen can't be restored programmatically after DOM destruction
+        // Always restore as fallback fullscreen
+        // Small delay to ensure DOM is fully rendered
+        requestAnimationFrame(() => {
           activateFallbackFullscreen(targetCard);
-        }
+        });
+      } else {
+        // Timer or split style no longer exists - fullscreen is lost
+        // This can happen if timer is deleted or split styles change
+        console.log("Fullscreen timer no longer exists after render");
       }
     }
   }
