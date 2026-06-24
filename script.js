@@ -3,6 +3,15 @@
   const $ = (s, el=document) => el.querySelector(s);
   const $$ = (s, el=document) => [...el.querySelectorAll(s)];
   const now = () => Date.now();
+  function registerServiceWorker(){
+    if (!("serviceWorker" in navigator)) return;
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("./sw.js").catch(err => {
+        console.warn("Service worker registration failed", err);
+      });
+    });
+  }
+
   const pad2 = n => String(n).padStart(2, "0");
   const pad3 = n => String(n).padStart(3, "0");
   const DAY_MS = 86400000;
@@ -2761,18 +2770,19 @@
   function openTemplateMenu(){
     templateMenu.innerHTML="";
     const add=document.createElement("div"); add.className="template-item"; add.innerHTML="<strong>＋ New Template</strong>";
-    add.addEventListener("click", ()=>{ templateMenu.classList.remove("open"); openEditor(null, {style:'bar', color:'#6c7bff', color2:'#6c7bff', units:'auto'}); });
+    add.addEventListener("click", ()=>{ templateMenu.classList.remove("open"); if (tplBtn) tplBtn.setAttribute("aria-expanded", "false"); openEditor(null, {style:'bar', color:'#6c7bff', color2:'#6c7bff', units:'auto'}); });
     templateMenu.appendChild(add);
     templates.forEach(tpl=>{
       const row=document.createElement("div"); row.className="template-item";
       const meta=`<div class='note'>${tpl.style} • ${tpl.units} • ${(tpl.triggers?.length||0)} trig</div>`;
       row.innerHTML=`<div style='display:flex;justify-content:space-between;gap:8px;align-items:center'><div>${escapeHtml(tpl.name)}</div><div><button class='btn' data-act='use'>Use</button> <button class='btn' data-act='edit'>Edit</button> <button class='btn' data-act='del'>Delete</button></div></div>${meta}`;
-      row.querySelector("[data-act='use']").addEventListener("click", (e)=>{ e.stopPropagation(); templateMenu.classList.remove("open"); openEditor(null, tpl); });
-      row.querySelector("[data-act='edit']").addEventListener("click", (e)=>{ e.stopPropagation(); templateMenu.classList.remove("open"); openEditor(null, tpl); $("#dialogTitle").textContent = "Edit Template"; });
+      row.querySelector("[data-act='use']").addEventListener("click", (e)=>{ e.stopPropagation(); templateMenu.classList.remove("open"); if (tplBtn) tplBtn.setAttribute("aria-expanded", "false"); openEditor(null, tpl); });
+      row.querySelector("[data-act='edit']").addEventListener("click", (e)=>{ e.stopPropagation(); templateMenu.classList.remove("open"); if (tplBtn) tplBtn.setAttribute("aria-expanded", "false"); openEditor(null, tpl); $("#dialogTitle").textContent = "Edit Template"; });
       row.querySelector("[data-act='del']").addEventListener("click", (e)=>{ e.stopPropagation(); if(confirm("Delete template '"+tpl.name+"'?")){ templates = templates.filter(x=>x.id!==tpl.id); saveTemplates(); openTemplateMenu(); } });
       templateMenu.appendChild(row);
     });
     templateMenu.classList.add("open");
+    if (tplBtn) tplBtn.setAttribute("aria-expanded", "true");
   }
 
   function toLocalDatetime(d){
@@ -4428,7 +4438,7 @@
     if (settingsBtn) settingsBtn.setAttribute('aria-expanded', 'false');
   });
   tplBtn.addEventListener("click", ()=> openTemplateMenu());
-  document.addEventListener("click", (e)=>{ if(!templateMenu.contains(e.target) && e.target!==tplBtn){ templateMenu.classList.remove("open"); } });
+  document.addEventListener("click", (e)=>{ if(!templateMenu.contains(e.target) && e.target!==tplBtn){ templateMenu.classList.remove("open"); if (tplBtn) tplBtn.setAttribute("aria-expanded", "false"); } });
   $("#authModeSwitch").addEventListener('click', (e) => {
     e.preventDefault();
     const isSignUp = $("#authTitle").textContent === "Log In";
@@ -4437,6 +4447,7 @@
   $("#authSubmitBtn").addEventListener('click', handleAuthSubmit);
   if (authDialog) authDialog.addEventListener('close', resetAuthDialogState);
 
+  registerServiceWorker();
   updateUIForLoginState();
   load();
   render(); 
