@@ -139,3 +139,13 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
 .split-color-chips{display:flex; gap:6px}
 .split-color-chip{font-size:.75rem; font-weight:600; padding:4px 8px; border-radius:999px; background:rgba(0,0,0,.35); color:#f7f8ff}
 .split-color-preview.light .split-color-chip{background:rgba(255,255,255,.68); color:#05070b}
+
+button:focus-visible,
+.btn:focus-visible,
+input:focus-visible,
+select:focus-visible,
+a:focus-visible{outline:2px solid var(--accent); outline-offset:3px;}
+
+@media (prefers-reduced-motion: reduce){
+  *, *::before, *::after{animation-duration:.01ms !important; animation-iteration-count:1 !important; scroll-behavior:auto !important; transition-duration:.01ms !important;}
+}
