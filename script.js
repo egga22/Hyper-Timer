@@ -155,7 +155,6 @@
   const importInput = $("#importInput");
   const templateMenu = $("#templateMenu");
   const tplBtn = $("#tplBtn");
-  const pauseAllBtn = $("#pauseAllBtn");
 
   let fallbackFullscreenCard = null;
 
@@ -4349,17 +4348,6 @@
     const minTick = timers.length ? Math.min(...timers.map(t=> +t.tick || 100), 100) : 100;
     setTimeout(()=> requestAnimationFrame(tick), clamp(minTick, 16, 250));
   }
-
-  pauseAllBtn.addEventListener("click", ()=>{
-    const anyPaused = timers.some(t=>t.mode==="duration" && t.paused);
-    const targetState = !anyPaused;
-    timers.forEach(t=>{
-      if (t.mode!=="duration") return;
-      if (targetState && !t.paused){ const remNow = remainingMs(t); t.paused = true; t.pausedAt = Date.now(); t.leftWhenPaused = remNow; }
-      if (!targetState && t.paused){ const delta = Date.now() - (t.pausedAt||Date.now()); t.start += delta; delete t.pausedAt; t.paused=false; }
-    });
-    render(); // Pause is visual and doesn't need a full save/sync
-  });
 
   if (settingsBtn) settingsBtn.addEventListener('click', () => openSettingsDialog());
   if (settingsDefaultStyle) settingsDefaultStyle.addEventListener('change', handlePreferenceFieldChange);
