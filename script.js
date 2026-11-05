@@ -4189,8 +4189,8 @@
 
     const ctx = cvs.getContext('2d');
 
-    let fs = Math.floor(cssH * (isFS ? 0.52 : 0.36));
-    const pad = Math.max(16, Math.floor(cssH * (isFS ? 0.06 : 0.12)));
+    let fs = Math.floor(cssH * (isFS ? 1.25 : 0.36));
+    const pad = Math.max(16, Math.floor(cssH * (isFS ? 0.02 : 0.12)));
 
     ctx.save();
     ctx.font = `${fs}px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace`;
