@@ -4091,6 +4091,15 @@
 
   function drawVisual(cvs,t){
     const style=t.style;
+    if (style !== "letters") {
+      const bounds = cvs.parentElement.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      const width = Math.max(1, Math.round(bounds.width * dpr));
+      const height = Math.max(1, Math.round(bounds.height * dpr));
+      // Cards draw once before insertion, when the wrapper has no layout yet.
+      if (bounds.width > 0 && bounds.height > 0 && (cvs.width !== width || cvs.height !== height)) { cvs.width = width; cvs.height = height; }
+      cvs.getContext("2d").clearRect(0, 0, cvs.width, cvs.height);
+    }
     if (style==="ring") return drawRing(cvs,t);
     if (style==="pie") return drawPie(cvs,t);
     if (style==="letters") return drawLetters(cvs,t);
@@ -4186,11 +4195,11 @@
     const dpr = window.devicePixelRatio||1;
     const wrap = cvs.parentElement;
     const card = wrap?.closest('.card');
-    const isFS = card && (document.fullscreenElement === card || card.classList.contains('fullscreen-fallback'));
+    const isFS = card && (activeNativeFullscreenElement() === card || card.classList.contains('fullscreen-fallback'));
     const cardW = card ? card.clientWidth : (parseFloat(getComputedStyle(cvs).width)||280);
-    const availW = Math.max(180, cardW - 28);
+    const availW = isFS ? wrap.clientWidth : Math.max(180, cardW - 28);
     const wrapH = isFS ? (wrap ? wrap.clientHeight : 533) : 0;
-    const cssH = isFS ? Math.max(wrapH, 280) : (parseFloat(getComputedStyle(cvs).height) || 280);
+    const cssH = isFS ? Math.max(wrapH, 1) : (parseFloat(getComputedStyle(cvs).height) || 280);
 
     const total = t.total0 || baseTotal(t);
     const rem = Math.max(0, remainingMs(t));
@@ -4202,8 +4211,8 @@
 
     const ctx = cvs.getContext('2d');
 
-    let fs = Math.floor(cssH * (isFS ? 0.52 : 0.36));
-    const pad = Math.max(16, Math.floor(cssH * (isFS ? 0.06 : 0.12)));
+    let fs = Math.floor(cssH * (isFS ? 1.25 : 0.36));
+    const pad = Math.max(16, Math.floor(cssH * (isFS ? 0.02 : 0.12)));
 
     ctx.save();
     ctx.font = `${fs}px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace`;
@@ -4217,10 +4226,10 @@
     }
     ctx.restore();
 
-    const targetW = isFS ? Math.max(cssH, availW) : Math.max(cssH, Math.min(availW, wWorst + pad*2));
+    const targetW = isFS ? availW : Math.max(cssH, Math.min(availW, wWorst + pad*2));
     if (Math.abs((parseFloat(getComputedStyle(cvs).width)||0) - targetW) > 1){
       cvs.style.width = targetW + "px";
-      wrap.style.width = targetW + "px";
+      if (!isFS) wrap.style.width = targetW + "px";
     }
     if (isFS && Math.abs((parseFloat(getComputedStyle(cvs).height)||0) - cssH) > 1){
       cvs.style.height = cssH + "px";
