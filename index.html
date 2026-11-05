@@ -326,6 +326,20 @@
   </form>
 </dialog>
 
+<dialog id="saveAnimationDialog" aria-labelledby="saveAnimationTitle">
+  <form method="dialog">
+    <div class="dialog-head"><div class="title" id="saveAnimationTitle">Save animation progress</div></div>
+    <div class="dialog-body">
+      <p>Reset the animation, or continue with its elapsed time? Changing the duration or end time can change the percentage shown.</p>
+      <div class="settings-actions">
+        <button class="btn" value="cancel">Cancel</button>
+        <button class="btn" value="continue">Continue</button>
+        <button class="btn primary" value="reset">Reset animation</button>
+      </div>
+    </div>
+  </form>
+</dialog>
+
 <dialog id="settingsDialog">
   <form method="dialog" novalidate>
     <div class="dialog-header">
@@ -393,6 +407,14 @@
               <span class="toggle-label">Show time to next percent on hover</span>
             </label>
             <div class="note">When hovering over percentage displays, show duration until next whole percentage.</div>
+          </div>
+          <div class="field">
+            <label for="settingsSaveAnimation">When saving a timer without a fixed start</label>
+            <select id="settingsSaveAnimation">
+              <option value="ask">Ask every time</option>
+              <option value="reset">Reset animation</option>
+              <option value="continue">Continue elapsed time</option>
+            </select>
           </div>
           <div class="settings-actions">
             <button class="btn primary" type="button" id="settingsDefaultsSaveBtn">Save Defaults</button>

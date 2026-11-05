@@ -252,6 +252,7 @@
   const settingsCustomFormat = $("#settingsCustomFormat");
   const settingsPercentHover = $("#settingsPercentHover");
   const settingsDefaultsSaveBtn = $("#settingsDefaultsSaveBtn");
+  const settingsSaveAnimation = $("#settingsSaveAnimation");
   const settingsDefaultsStatus = $("#settingsDefaultsStatus");
   const settingsLoopsSection = $("#settingsLoopsSection");
   const settingsLoopsToggle = $("#settingsLoopsToggle");
@@ -476,7 +477,8 @@
     autoDisplayMode: "Standard",
     defaultCustomFormat: "{HH}:{mm}:{ss}",
     loopsEnabled: true,
-    percentHoverEnabled: false
+    percentHoverEnabled: false,
+    saveAnimationBehavior: "ask"
   };
   const KEY_PREFERENCE_STORE = "hyperTimer_v7_prefStore";
   const KNOWN_ANIMATION_STYLES = ["none", "bar", "ring", "pie", "multibar", "letters", "color", "pro"];
@@ -1065,7 +1067,8 @@
       autoDisplayMode: sanitizeAutoDisplayMode(base.autoDisplayMode ?? base.autoMode ?? base.autoUnitsMode),
       defaultCustomFormat: sanitizeCustomFormat(base.defaultCustomFormat ?? base.customFormat),
       loopsEnabled,
-      percentHoverEnabled
+      percentHoverEnabled,
+      saveAnimationBehavior: ["ask", "reset", "continue"].includes(base.saveAnimationBehavior) ? base.saveAnimationBehavior : "ask"
     };
   }
 
@@ -1283,6 +1286,7 @@
     if (settingsCustomFormat) {
       settingsCustomFormat.value = sanitizedFormat;
     }
+    settingsSaveAnimation.value = userPreferences.saveAnimationBehavior;
     isUpdatingPreferenceUI = false;
     updateSettingsCustomFormatVisibility();
   }
@@ -1907,6 +1911,8 @@
     if (!settingsDefaultStyle || !settingsDefaultUnits) return;
     updateSettingsCustomFormatVisibility();
     const pending = sanitizePreferences({
+      ...userPreferences,
+      saveAnimationBehavior: settingsSaveAnimation.value,
       defaultStyle: settingsDefaultStyle.value,
       defaultUnits: settingsDefaultUnits.value,
       autoDisplayMode: settingsAutoUnitsMode ? settingsAutoUnitsMode.value : undefined,
@@ -1914,6 +1920,7 @@
     });
     const current = sanitizePreferences(userPreferences);
     if (
+      pending.saveAnimationBehavior === current.saveAnimationBehavior &&
       pending.defaultStyle === current.defaultStyle &&
       pending.defaultUnits === current.defaultUnits &&
       pending.autoDisplayMode === current.autoDisplayMode &&
@@ -1933,6 +1940,8 @@
     }
 
     const pending = sanitizePreferences({
+      ...userPreferences,
+      saveAnimationBehavior: settingsSaveAnimation.value,
       defaultStyle: settingsDefaultStyle.value,
       defaultUnits: settingsDefaultUnits.value,
       autoDisplayMode: settingsAutoUnitsMode ? settingsAutoUnitsMode.value : undefined,
@@ -1944,7 +1953,8 @@
     }
 
     const current = sanitizePreferences(userPreferences);
-    const unchanged = adjusted.defaultStyle === current.defaultStyle &&
+    const unchanged = adjusted.saveAnimationBehavior === current.saveAnimationBehavior &&
+      adjusted.defaultStyle === current.defaultStyle &&
       adjusted.defaultUnits === current.defaultUnits &&
       adjusted.autoDisplayMode === current.autoDisplayMode &&
       adjusted.defaultCustomFormat === current.defaultCustomFormat;
@@ -3558,8 +3568,42 @@
     templates.push(tpl); saveTemplates(); alert("Saved template: "+tpl.name);
   });
 
+  async function chooseSaveAnimationBehavior() {
+    if (userPreferences.saveAnimationBehavior !== "ask") return userPreferences.saveAnimationBehavior;
+    const dialog = $("#saveAnimationDialog");
+    dialog.returnValue = "cancel";
+    return new Promise(resolve => {
+      dialog.addEventListener("close", () => {
+        resolve(["reset", "continue"].includes(dialog.returnValue) ? dialog.returnValue : null);
+      }, { once: true });
+      dialog.showModal();
+    });
+  }
+
+  function applySaveAnimationBehavior(record, existing, behavior, timestamp) {
+    const elapsed = behavior === "continue" ? Math.max(0, elapsedMs(existing)) : 0;
+    record.start = timestamp - elapsed;
+    record.total0 = record.mode === "duration" ? record.duration : Math.max(1, record.targetMs - record.start);
+    const remaining = record.mode === "duration" ? record.duration - elapsed : record.targetMs - timestamp;
+    record.completed = behavior === "continue" && !!existing.completed && remaining <= 0;
+    record._firedMap = behavior === "continue" ? { ...existing._firedMap } : {};
+    record._kMap = behavior === "continue" ? { ...existing._kMap } : {};
+    record._prevRem = remaining;
+    record.paused = !!existing.paused && record.mode === "duration";
+    record.pausedAt = record.paused ? timestamp : null;
+    record.leftWhenPaused = record.paused ? remaining : null;
+    record.mb_plan = planMultiBar(Math.max(1000, record.total0), record.mb_bars || null, record.mb_ticks || null);
+    // Rebuild Pro animation plans for the edited total.
+    record.splitSettings = null;
+  }
+
+  let timerSaveInProgress = false;
   $("#saveBtn").addEventListener("click", async (e)=>{
     e.preventDefault();
+    if (timerSaveInProgress) return;
+    timerSaveInProgress = true;
+    $("#saveBtn").disabled = true;
+    try {
     const existing = editId ? timers.find(x=>x.id===editId) : null;
     const loopReferenceMs = f.mode.value === "datetime"
       ? (f.when && f.when.value ? parseLocalDateTime(f.when.value) : existing?.targetMs ?? null)
@@ -3659,18 +3703,30 @@
         total0: tot, mb_plan: plan, triggers, doneSoundDataUrl, doneTts: f.doneTts.value || "",
         prestigeLevel: existing?.prestigeLevel || 0 };
     }
+    record.completed = false;
+    record.paused = false;
+    record.pausedAt = null;
+    record.leftWhenPaused = null;
+    record._prevRem = remainingMs(record);
+    const needsSaveChoice = existing &&
+      (record.mode === "duration" || (!f.startWhen.value && !f.startPct.value.trim()));
+    if (needsSaveChoice) {
+      const behavior = await chooseSaveAnimationBehavior();
+      if (!behavior) return;
+      applySaveAnimationBehavior(record, existing, behavior, now());
+    }
     if (record.style === "pro"){
       ensureProSplitState(record);
     }
     const i = timers.findIndex(x=>x.id===record.id);
-    if (i>=0) timers[i] = { ...timers[i], ...record, _firedMap:{}, _kMap:{} };
+    if (i>=0) timers[i] = { ...timers[i], _firedMap:{}, _kMap:{}, ...record };
     else timers.push(record);
     
     await updateAndSaveTimers();
 
     if (window.flutter_inappwebview) {
       const durationInSeconds = Math.round(remainingMs(record) / 1000);
-      if (durationInSeconds > 0) {
+      if (durationInSeconds > 0 && !record.paused) {
         const notificationId = stringToNotificationId(record.id);
         window.flutter_inappwebview.callHandler(
           'triggerNotification',
@@ -3683,6 +3739,10 @@
     }
 
     if (editor.open) editor.close();
+    } finally {
+      timerSaveInProgress = false;
+      $("#saveBtn").disabled = false;
+    }
   });
 
   exportBtn.addEventListener("click", ()=>{
@@ -4362,6 +4422,7 @@
   });
 
   if (settingsBtn) settingsBtn.addEventListener('click', () => openSettingsDialog());
+  settingsSaveAnimation.addEventListener("change", handlePreferenceFieldChange);
   if (settingsDefaultStyle) settingsDefaultStyle.addEventListener('change', handlePreferenceFieldChange);
   if (settingsDefaultUnits) settingsDefaultUnits.addEventListener('change', handlePreferenceFieldChange);
   if (settingsAutoUnitsMode) settingsAutoUnitsMode.addEventListener('change', handlePreferenceFieldChange);
