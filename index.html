@@ -285,11 +285,27 @@
             </div>
           </div>
           <div id="loopingAlignRow" class="field invisible">
-            <label class="toggle">
-              <input class="toggle-input" type="checkbox" id="f_loopAlignStart">
-              <span class="toggle-label">Start next loop at previous end</span>
-            </label>
-            <div class="note">Use the previous end date and time as the next start when looping target timers.</div>
+            <label for="f_loopStartBehavior">Next loop starts</label>
+            <select id="f_loopStartBehavior">
+              <option value="restart">When the loop restarts</option>
+              <option value="previousEnd">At the previous end</option>
+              <option value="sameDuration">The same duration before the next end</option>
+              <option value="custom">At a custom time, with weekday overrides (Beta)</option>
+            </select>
+            <div id="loopCustomStartFields" class="field-group invisible">
+              <label for="f_loopStartDay">Start date, relative to the next end</label>
+              <select id="f_loopStartDay"><option value="0">Same day</option><option value="-1">Previous day</option></select>
+              <label for="f_loopStartTime">Default start time</label>
+              <input id="f_loopStartTime" type="time" value="08:00">
+              <div class="note">Local time. Leave a weekday blank to use the default. Example: 08:00 by default, Wednesday 09:30. The start must be before the end.</div>
+              <label for="f_loopStartDay0">Sunday override</label><input id="f_loopStartDay0" type="time" data-loop-start-day="0">
+              <label for="f_loopStartDay1">Monday override</label><input id="f_loopStartDay1" type="time" data-loop-start-day="1">
+              <label for="f_loopStartDay2">Tuesday override</label><input id="f_loopStartDay2" type="time" data-loop-start-day="2">
+              <label for="f_loopStartDay3">Wednesday override</label><input id="f_loopStartDay3" type="time" data-loop-start-day="3">
+              <label for="f_loopStartDay4">Thursday override</label><input id="f_loopStartDay4" type="time" data-loop-start-day="4">
+              <label for="f_loopStartDay5">Friday override</label><input id="f_loopStartDay5" type="time" data-loop-start-day="5">
+              <label for="f_loopStartDay6">Saturday override</label><input id="f_loopStartDay6" type="time" data-loop-start-day="6">
+            </div>
           </div>
         </div>
       </details>

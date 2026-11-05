@@ -315,7 +315,9 @@
     loopMonthlyDayRow: $("#loopMonthlyDayRow"),
     loopMonthlyOrdinalRow: $("#loopMonthlyOrdinalRow"),
     loopAlignRow: $("#loopingAlignRow"),
-    loopAlignStart: $("#f_loopAlignStart"),
+    loopStartBehavior: $("#f_loopStartBehavior"),
+    loopStartDay: $("#f_loopStartDay"),
+    loopStartTime: $("#f_loopStartTime"),
     loopShortTermSummary: $("#loopShortTermSummary"),
     loopShortTermSummaryText: $("#loopShortTermSummaryText"),
     loopShortTermEditBtn: $("#loopShortTermEditBtn"),
@@ -1045,6 +1047,14 @@
       monthlyOrdinal,
       monthlyWeekday,
       alignStartToEnd,
+      startBehavior: ["restart", "previousEnd", "sameDuration", "custom"].includes(base.startBehavior)
+        ? base.startBehavior : (alignStartToEnd ? "previousEnd" : "restart"),
+      startDayOffset: Number(base.startDayOffset) === -1 ? -1 : 0,
+      startTime: /^([01]\d|2[0-3]):[0-5]\d$/.test(base.startTime) ? base.startTime : "08:00",
+      startWeekdays: Array.from({length:7}, (_, day) => {
+        const value = base.startWeekdays?.[day];
+        return /^([01]\d|2[0-3]):[0-5]\d$/.test(value) ? value : "";
+      }),
       events
     };
   }
@@ -1116,7 +1126,11 @@
       monthlyDay: f.loopMonthlyDay ? f.loopMonthlyDay.value : existing.monthlyDay,
       monthlyOrdinal: f.loopMonthlyOrdinal ? f.loopMonthlyOrdinal.value : existing.monthlyOrdinal,
       monthlyWeekday: f.loopMonthlyWeekday ? f.loopMonthlyWeekday.value : existing.monthlyWeekday,
-      alignStartToEnd: f.loopAlignStart ? f.loopAlignStart.checked : existing.alignStartToEnd,
+      alignStartToEnd: f.loopStartBehavior.value === "previousEnd",
+      startBehavior: f.loopStartBehavior.value,
+      startDayOffset: Number(f.loopStartDay.value),
+      startTime: f.loopStartTime.value,
+      startWeekdays: $$("[data-loop-start-day]").map(input => input.value),
       events
     };
     return sanitizeLoopConfig(raw, mode, reference);
@@ -2461,6 +2475,26 @@
     return candidate;
   }
 
+  function loopStartTimestamp(config, nextTarget, previousTarget, total, nowTs) {
+    if (config.startBehavior === "previousEnd") return previousTarget;
+    if (config.startBehavior === "sameDuration") return nextTarget - Math.max(1, total);
+    if (config.startBehavior === "custom") {
+      const date = new Date(nextTarget);
+      date.setDate(date.getDate() + config.startDayOffset);
+      const time = config.startWeekdays[date.getDay()] || config.startTime;
+      const [hour, minute] = time.split(":").map(Number);
+      date.setHours(hour, minute, 0, 0);
+      return date.getTime();
+    }
+    return nowTs;
+  }
+
+  function updateLoopStartFields() {
+    const customOption = f.loopStartBehavior.querySelector('option[value="custom"]');
+    customOption.disabled = !userCanAccessShortTermSchedule();
+    $("#loopCustomStartFields").classList.toggle("invisible", f.loopStartBehavior.value !== "custom");
+  }
+
   function handleLoopRestart(t, total){
     if (!timerLoopsEnabled(t)) return false;
     const nowTs = now();
@@ -2481,10 +2515,9 @@
       if (!Number.isFinite(nextTarget)){
         return false;
       }
-      let startMs = nowTs;
-      if (sanitized.alignStartToEnd && Number.isFinite(previousTarget)){
-        startMs = previousTarget;
-      }
+      let startMs = loopStartTimestamp(sanitized, nextTarget, previousTarget, total, nowTs);
+      // Invalid imported custom schedules must not silently change their meaning.
+      if (sanitized.startBehavior === "custom" && (!Number.isFinite(startMs) || startMs >= nextTarget)) return false;
       let totalMs = nextTarget - startMs;
       if (!Number.isFinite(totalMs) || totalMs <= 0){
         startMs = nowTs;
@@ -3001,9 +3034,11 @@
       const supportedMode = draft.mode === "duration" || draft.mode === "datetime";
       f.loopEnabled.checked = loopsAllowed && supportedMode && sanitizedLoop.enabled;
     }
-    if (f.loopAlignStart) {
-      f.loopAlignStart.checked = !!sanitizedLoop.alignStartToEnd;
-    }
+    f.loopStartBehavior.value = sanitizedLoop.startBehavior;
+    f.loopStartDay.value = String(sanitizedLoop.startDayOffset);
+    f.loopStartTime.value = sanitizedLoop.startTime;
+    $$("[data-loop-start-day]").forEach((input, day) => { input.value = sanitizedLoop.startWeekdays[day]; });
+    updateLoopStartFields();
     updateShortTermSummary();
 
     renderTrList(draft.triggers||[]);
@@ -3565,6 +3600,17 @@
       ? (f.when && f.when.value ? parseLocalDateTime(f.when.value) : existing?.targetMs ?? null)
       : (existing?.mode === "datetime" ? existing.targetMs : null);
     const loopConfig = gatherLoopConfigFromForm(f.mode.value, existing?.loopConfig ?? null, loopReferenceMs);
+    if (loopConfig.enabled && loopConfig.startBehavior === "custom") {
+      if (!userCanAccessShortTermSchedule()) { alert("Custom loop starts require an Owner or Beta Tester account."); return; }
+      if (!f.loopStartTime.value) { alert("Choose a default loop start time."); return; }
+      // Check every weekday, including dates with overrides, against the target clock time.
+      const target = new Date(loopReferenceMs);
+      const targetMinutes = target.getHours() * 60 + target.getMinutes();
+      if (loopConfig.startDayOffset === 0 && loopConfig.startWeekdays.concat(loopConfig.startTime).filter(Boolean).some(time => {
+        const [hour, minute] = time.split(":").map(Number);
+        return hour * 60 + minute >= targetMinutes;
+      })) { alert("Each same-day start time must be before the end time. Choose Previous day for an overnight timer."); return; }
+    }
     const base = {
       id: editId || uid("t_"), name: f.name.value.trim() || "Untitled", style: f.style.value, color: f.color.value,
       color2: f.color2.value || f.color.value,
@@ -4379,6 +4425,7 @@
     const pending = sanitizePreferences({ ...userPreferences, percentHoverEnabled: settingsPercentHover.checked });
     applyPreferencesToState(pending);
   });
+  f.loopStartBehavior.addEventListener("change", updateLoopStartFields);
   if (f.loopEnabled) f.loopEnabled.addEventListener('change', () => {
     updateLoopingFieldsForMode();
     updateShortTermSummary();
