@@ -4074,7 +4074,8 @@
       const dpr = window.devicePixelRatio || 1;
       const width = Math.max(1, Math.round(bounds.width * dpr));
       const height = Math.max(1, Math.round(bounds.height * dpr));
-      if (cvs.width !== width || cvs.height !== height) { cvs.width = width; cvs.height = height; }
+      // Cards draw once before insertion, when the wrapper has no layout yet.
+      if (bounds.width > 0 && bounds.height > 0 && (cvs.width !== width || cvs.height !== height)) { cvs.width = width; cvs.height = height; }
       cvs.getContext("2d").clearRect(0, 0, cvs.width, cvs.height);
     }
     if (style==="ring") return drawRing(cvs,t);
