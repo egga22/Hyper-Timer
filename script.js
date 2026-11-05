@@ -2775,9 +2775,18 @@
     templates.forEach(tpl=>{
       const row=document.createElement("div"); row.className="template-item";
       const meta=`<div class='note'>${tpl.style} • ${tpl.units} • ${(tpl.triggers?.length||0)} trig</div>`;
-      row.innerHTML=`<div style='display:flex;justify-content:space-between;gap:8px;align-items:center'><div>${escapeHtml(tpl.name)}</div><div><button class='btn' data-act='use'>Use</button> <button class='btn' data-act='edit'>Edit</button> <button class='btn' data-act='del'>Delete</button></div></div>${meta}`;
+      row.innerHTML=`<div style='display:flex;justify-content:space-between;gap:8px;align-items:center'><div>${escapeHtml(tpl.name)}</div><div><button class='btn' data-act='use'>Use</button> <button class='btn' data-act='rename'>Rename</button> <button class='btn' data-act='edit'>Edit</button> <button class='btn' data-act='del'>Delete</button></div></div>${meta}`;
       row.querySelector("[data-act='use']").addEventListener("click", (e)=>{ e.stopPropagation(); templateMenu.classList.remove("open"); if (tplBtn) tplBtn.setAttribute("aria-expanded", "false"); openEditor(null, tpl); });
       row.querySelector("[data-act='edit']").addEventListener("click", (e)=>{ e.stopPropagation(); templateMenu.classList.remove("open"); if (tplBtn) tplBtn.setAttribute("aria-expanded", "false"); openEditor(null, tpl); $("#dialogTitle").textContent = "Edit Template"; });
+      row.querySelector("[data-act='rename']").addEventListener("click", (e)=>{
+        e.stopPropagation();
+        const name = prompt("Template name", tpl.name);
+        if (name === null) return;
+        if (!name.trim()) { alert("Enter a template name."); return; }
+        tpl.name = name.trim();
+        saveTemplates();
+        openTemplateMenu();
+      });
       row.querySelector("[data-act='del']").addEventListener("click", (e)=>{ e.stopPropagation(); if(confirm("Delete template '"+tpl.name+"'?")){ templates = templates.filter(x=>x.id!==tpl.id); saveTemplates(); openTemplateMenu(); } });
       templateMenu.appendChild(row);
     });
