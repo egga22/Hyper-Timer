@@ -3796,7 +3796,7 @@
     actions.className = "actions";
     const pauseBtn = (t.mode==="datetime" || t.mode==="smart") ? "" : `<button class="action-btn" data-act="pause" title="${t.paused?'Resume':'Pause'}">⏯︎</button>`;
     const fullscreenBtn = `<button class="action-btn" data-act="fullscreen" title="Fullscreen">⛶</button>`;
-    actions.innerHTML = `${pauseBtn}${fullscreenBtn}<button class="action-btn" data-act="prestige" title="Prestige">★</button><button class="action-btn" data-act="tplsave" title="Save template">⇪</button><button class="action-btn" data-act="edit" title="Edit">✎</button><button class="action-btn" data-act="delete" title="Delete">🗑</button>`;
+    actions.innerHTML = `${pauseBtn}${fullscreenBtn}<button class="action-btn" data-act="duplicate" title="Duplicate timer" aria-label="Duplicate timer">⧉</button><button class="action-btn" data-act="prestige" title="Prestige">★</button><button class="action-btn" data-act="tplsave" title="Save template">⇪</button><button class="action-btn" data-act="edit" title="Edit">✎</button><button class="action-btn" data-act="delete" title="Delete">🗑</button>`;
     card.appendChild(actions);
 
     const title = document.createElement("div");
@@ -3912,6 +3912,20 @@
         if (t.paused){ t.pausedAt = Date.now(); t.leftWhenPaused = remNow; }
         else { const delta = Date.now() - (t.pausedAt||Date.now()); if (t.mode==="duration"){ t.start += delta; } else { t.targetMs += delta; } delete t.pausedAt; }
         render();
+      } else if (act==="duplicate"){
+        // Copy progress, pause state and fired reminders, but never share nested state.
+        const copy = JSON.parse(JSON.stringify(t));
+        copy.id = uid("t_");
+        copy.name = `${t.name || "Untitled"} (copy)`;
+        timers.push(copy);
+        await updateAndSaveTimers();
+        if (window.flutter_inappwebview && !copy.paused && !copy.completed) {
+          const seconds = Math.round(remainingMs(copy) / 1000);
+          if (seconds > 0) window.flutter_inappwebview.callHandler(
+            'triggerNotification', stringToNotificationId(copy.id),
+            'Hyper Timer', 'Your timer has finished!', seconds
+          );
+        }
       } else if (act==="fullscreen"){
         ev.preventDefault();
         const activeNative = activeNativeFullscreenElement();
