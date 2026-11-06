@@ -4153,7 +4153,7 @@
     }
   }
 
-  function makeCanvas(size){ const cvs=document.createElement("canvas"); cvs.width=size*2; cvs.height=size*2; cvs.style.width=size+"px"; cvs.style.height=size+"px"; return cvs; }
+  function makeCanvas(size){ const cvs=document.createElement("canvas"); cvs.width=size*2; cvs.height=size*2; cvs.style.width="100%"; cvs.style.height="100%"; return cvs; }
   function makeBig(t){
     const big=document.createElement("div"); big.className="big";
     const span=document.createElement("span"); span.className="flip";
@@ -4302,10 +4302,10 @@
     const wrap = cvs.parentElement;
     const card = wrap?.closest('.card');
     const isFS = card && (activeNativeFullscreenElement() === card || card.classList.contains('fullscreen-fallback'));
-    const cardW = card ? card.clientWidth : (parseFloat(getComputedStyle(cvs).width)||280);
-    const availW = isFS ? wrap.clientWidth : Math.max(180, cardW - 28);
-    const wrapH = isFS ? (wrap ? wrap.clientHeight : 533) : 0;
-    const cssH = isFS ? Math.max(wrapH, 1) : (parseFloat(getComputedStyle(cvs).height) || 280);
+    // The wrapper's CSS owns layout in both modes. Never persist fullscreen
+    // dimensions on the canvas or wrapper: those inline sizes survive exit.
+    const availW = wrap.clientWidth || 280;
+    const cssH = wrap.clientHeight || 280;
 
     const total = t.total0 || baseTotal(t);
     const rem = Math.max(0, remainingMs(t));
@@ -4332,15 +4332,7 @@
     }
     ctx.restore();
 
-    const targetW = isFS ? availW : Math.max(cssH, Math.min(availW, wWorst + pad*2));
-    if (Math.abs((parseFloat(getComputedStyle(cvs).width)||0) - targetW) > 1){
-      cvs.style.width = targetW + "px";
-      if (!isFS) wrap.style.width = targetW + "px";
-    }
-    if (isFS && Math.abs((parseFloat(getComputedStyle(cvs).height)||0) - cssH) > 1){
-      cvs.style.height = cssH + "px";
-    }
-    const bw = Math.round(targetW * dpr), bh = Math.round(cssH * dpr);
+    const bw = Math.round(availW * dpr), bh = Math.round(cssH * dpr);
     if (cvs.width !== bw || cvs.height !== bh){ cvs.width = bw; cvs.height = bh; }
 
     const { text } = currentLetters(t);
