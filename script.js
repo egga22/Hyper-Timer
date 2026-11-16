@@ -1060,6 +1060,53 @@
     };
   }
 
+  const FULLSCREEN_CONTROLS = [
+    ["pause", "Pause / Resume"], ["duplicate", "Copy timer"],
+    ["prestige", "Prestige"], ["tplsave", "Save template"],
+    ["edit", "Edit"], ["delete", "Delete"]
+  ];
+
+  function sanitizeFullscreenControls(value) {
+    return FULLSCREEN_CONTROLS.map(([key]) => key).filter(key => Array.isArray(value) && value.includes(key));
+  }
+
+  function effectiveFullscreenControls(timer) {
+    return sanitizeFullscreenControls(Array.isArray(timer.fullscreenControls)
+      ? timer.fullscreenControls : userPreferences.fullscreenControls);
+  }
+
+  function fillFullscreenControls(container, selected, disabled = false) {
+    container.replaceChildren();
+    for (const [key, title] of FULLSCREEN_CONTROLS) {
+      const label = document.createElement("label");
+      label.style.display = "block";
+      const input = document.createElement("input");
+      input.type = "checkbox";
+      input.value = key;
+      input.checked = selected.includes(key);
+      input.disabled = disabled;
+      label.append(input, document.createTextNode(` ${title}`));
+      container.append(label);
+    }
+  }
+
+  function readFullscreenControls(container) {
+    return Array.from(container.querySelectorAll("input:checked"), input => input.value);
+  }
+
+  function refreshFullscreenControls() {
+    const container = $("#settingsFullscreenControls");
+    fillFullscreenControls(container, sanitizeFullscreenControls(userPreferences.fullscreenControls));
+    document.querySelectorAll(".card").forEach(card => {
+      const timer = timers.find(timer => timer.id === card.dataset.id);
+      if (!timer) return;
+      const selected = effectiveFullscreenControls(timer);
+      card.querySelectorAll(".actions [data-act]").forEach(button => {
+        button.classList.toggle("fullscreen-visible", selected.includes(button.dataset.act));
+      });
+    });
+  }
+
   function sanitizePreferences(prefs) {
     const base = prefs && typeof prefs === "object" ? prefs : {};
     const loopsEnabledRaw = base.loopsEnabled;
@@ -1076,6 +1123,7 @@
       autoDisplayMode: sanitizeAutoDisplayMode(base.autoDisplayMode ?? base.autoMode ?? base.autoUnitsMode),
       defaultCustomFormat: sanitizeCustomFormat(base.defaultCustomFormat ?? base.customFormat),
       loopsEnabled,
+      fullscreenControls: sanitizeFullscreenControls(base.fullscreenControls),
       percentHoverEnabled,
       saveAnimationBehavior: ["ask", "reset", "continue"].includes(base.saveAnimationBehavior) ? base.saveAnimationBehavior : "ask"
     };
@@ -1223,6 +1271,7 @@
     updateDefaultSettingsSection();
     updateLoopFeatureToggle();
     updatePercentHoverToggle();
+    refreshFullscreenControls();
     updateLoopingSectionVisibility();
   }
 
@@ -2968,6 +3017,7 @@
     const draft = id ? timers.find(x=>x.id===id) : {
       id: uid("t_"), name:"", mode:"duration", style: draftStyle, color: template?.color || "#6c7bff",
       color2: template?.color2 || template?.color || "#6c7bff",
+      fullscreenControls: template?.fullscreenControls ?? null,
       units: draftUnits,
       format: template?.format || (draftUnits === "custom" ? getDefaultCustomFormat() : "{HH}:{mm}:{ss}"),
       ring_thickness: template?.ring_thickness ?? 10, ease: template?.ease || "linear", tick: template?.tick ?? 100, ms: template?.ms || "off",
@@ -2976,6 +3026,8 @@
       smartMethod: "manifold", smartUrl: ""
     };
 
+    $("#f_fullscreenOverride").checked = Array.isArray(draft.fullscreenControls);
+    fillFullscreenControls($("#timerFullscreenControls"), effectiveFullscreenControls(draft), !Array.isArray(draft.fullscreenControls));
     f.name.value = draft.name||""; f.mode.value=draft.mode||"duration"; f.style.value=draft.style||"bar"; f.color.value=draft.color||"#6c7bff";
     if (f.color2) f.color2.value = draft.color2 || draft.color || "#6c7bff";
     f.units.value = draft.units || "auto";
@@ -3136,6 +3188,7 @@
   function openSettingsDialog() {
     if (!settingsDialog) return;
     updateUIForLoginState();
+    refreshFullscreenControls();
     try {
       settingsDialog.showModal ? settingsDialog.showModal() : settingsDialog.setAttribute("open", "");
     } catch (e) {
@@ -3588,6 +3641,7 @@
     const triggers = await collectTrEntries(new Map());
     const tpl = {
       id: uid("tpl_"), name: f.name.value.trim() || "Template", style: f.style.value, color: f.color.value,
+      fullscreenControls: $("#f_fullscreenOverride").checked ? readFullscreenControls($("#timerFullscreenControls")) : null,
       color2: f.color2.value || f.color.value,
       units: f.units.value,
       format: resolveFormatForUnits(f.units.value, f.format.value),
@@ -3664,6 +3718,7 @@
       })) { alert("Each same-day start time must be before the end time. Choose Previous day for an overnight timer."); return; }
     }
     const base = {
+      fullscreenControls: $("#f_fullscreenOverride").checked ? readFullscreenControls($("#timerFullscreenControls")) : null,
       id: editId || uid("t_"), name: f.name.value.trim() || "Untitled", style: f.style.value, color: f.color.value,
       color2: f.color2.value || f.color.value,
       units: f.units.value,
@@ -3903,6 +3958,10 @@
     const pauseBtn = (t.mode==="datetime" || t.mode==="smart") ? "" : `<button class="action-btn" data-act="pause" title="${t.paused?'Resume':'Pause'}">⏯︎</button>`;
     const fullscreenBtn = `<button class="action-btn" data-act="fullscreen" title="Fullscreen">⛶</button>`;
     actions.innerHTML = `${pauseBtn}${fullscreenBtn}<button class="action-btn" data-act="duplicate" title="Duplicate timer" aria-label="Duplicate timer">⧉</button><button class="action-btn" data-act="prestige" title="Prestige">★</button><button class="action-btn" data-act="tplsave" title="Save template">⇪</button><button class="action-btn" data-act="edit" title="Edit">✎</button><button class="action-btn" data-act="delete" title="Delete">🗑</button>`;
+    const fullscreenControls = effectiveFullscreenControls(t);
+    actions.querySelectorAll("[data-act]").forEach(button => {
+      button.classList.toggle("fullscreen-visible", fullscreenControls.includes(button.dataset.act));
+    });
     card.appendChild(actions);
 
     const title = document.createElement("div");
@@ -4494,6 +4553,13 @@
     applyPreferencesToState(pending);
   });
   
+  $("#settingsFullscreenControls").addEventListener("change", () => {
+    applyPreferencesToState({ ...userPreferences, fullscreenControls: readFullscreenControls($("#settingsFullscreenControls")) });
+  });
+  $("#f_fullscreenOverride").addEventListener("change", event => {
+    $("#timerFullscreenControls").querySelectorAll("input").forEach(input => { input.disabled = !event.target.checked; });
+  });
+
   if (settingsPercentHover) settingsPercentHover.addEventListener('change', () => {
     const pending = sanitizePreferences({ ...userPreferences, percentHoverEnabled: settingsPercentHover.checked });
     applyPreferencesToState(pending);
