@@ -157,6 +157,40 @@
   const tplBtn = $("#tplBtn");
 
   let fallbackFullscreenCard = null;
+  let previousNativeFullscreenCard = null;
+  const fullscreenRedrawCards = new Set();
+  let fullscreenRedrawFrame = null;
+
+  function scheduleFullscreenRedraw(card){
+    if (!card) return;
+    fullscreenRedrawCards.add(card);
+    if (fullscreenRedrawFrame !== null) return;
+    fullscreenRedrawFrame = requestAnimationFrame(() => {
+      fullscreenRedrawFrame = null;
+      fullscreenRedrawCards.forEach(target => {
+        if (!target.isConnected) return;
+        const timer = timers.find(t => String(t.id) === target.dataset.id);
+        const canvas = target.querySelector('canvas');
+        if (!timer || !canvas) return;
+        const style = target.dataset.displayStyle || timer.style;
+        drawVisual(canvas, style === timer.style ? timer : { ...timer, style });
+      });
+      fullscreenRedrawCards.clear();
+    });
+  }
+
+  function handleNativeFullscreenChange(){
+    const active = activeNativeFullscreenElement();
+    scheduleFullscreenRedraw(previousNativeFullscreenCard);
+    scheduleFullscreenRedraw(active);
+    previousNativeFullscreenCard = active;
+  }
+  document.addEventListener('fullscreenchange', handleNativeFullscreenChange);
+  document.addEventListener('webkitfullscreenchange', handleNativeFullscreenChange);
+  document.addEventListener('MSFullscreenChange', handleNativeFullscreenChange);
+  window.addEventListener('resize', () => {
+    scheduleFullscreenRedraw(activeNativeFullscreenElement() || fallbackFullscreenCard);
+  });
 
   function activeNativeFullscreenElement(){
     return document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement || null;
@@ -201,6 +235,7 @@
     
     // Remove fullscreen classes and data attributes
     target.classList.remove("fullscreen-fallback");
+    scheduleFullscreenRedraw(target);
     if (target.dataset) delete target.dataset.fullscreenFallback;
     
     // Clear the global reference if this was the tracked card
@@ -223,6 +258,7 @@
     card.classList.add("fullscreen-fallback");
     if (card.dataset) card.dataset.fullscreenFallback = "1";
     document.body.classList.add("has-fullscreen-fallback");
+    scheduleFullscreenRedraw(card);
   }
 
   function handleEscapeForFallback(ev){
@@ -4048,10 +4084,7 @@
           return;
         }
         
-        // If another card is in native fullscreen or fallback, exit it first
-        if (activeNative && activeNative !== card){
-          await exitNativeFullscreenIfActive();
-        }
+        // Native fullscreen can switch elements directly, without an exit round trip.
         if (fallbackFullscreenCard && fallbackFullscreenCard !== card){
           deactivateFallbackFullscreen(fallbackFullscreenCard);
         }
@@ -4059,6 +4092,7 @@
         // Try to enter native fullscreen for this card
         const success = await tryEnterNativeFullscreen(card);
         if (!success){
+          if (activeNative) await exitNativeFullscreenIfActive();
           // Fallback to CSS fullscreen if native fails
           activateFallbackFullscreen(card);
         }
@@ -4412,31 +4446,64 @@
 
   function escapeHtml(str){ return String(str).replace(/[&<>"']/g, s=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;"}[s])); }
 
+  // Cards are replaced on render; weak keys let old DOM and references be collected.
+  const cardUpdateNodes = new WeakMap();
+  function getCardUpdateNodes(card){
+    let nodes = cardUpdateNodes.get(card);
+    if (!nodes){
+      nodes = {
+        txt: card.querySelector('.big .flip'),
+        fill: card.querySelector('.progressbar > div'),
+        cvs: card.querySelector('canvas'),
+        flipTimeout: null
+      };
+      cardUpdateNodes.set(card, nodes);
+    }
+    return nodes;
+  }
+
+  function groupTimerCards(grid){
+    const groups = new Map();
+    grid.querySelectorAll('.card[data-id]').forEach(card => {
+      const id = card.dataset.id;
+      if (!groups.has(id)) groups.set(id, []);
+      groups.get(id).push(card);
+    });
+    return groups;
+  }
+
   function tick(){
+    const cardsById = groupTimerCards(grid);
+    const fullscreenCard = activeNativeFullscreenElement() || fallbackFullscreenCard;
     timers.forEach(t=>{
       if (t.style === "pro") ensureProSplitState(t);
-      const cards = grid.querySelectorAll('.card[data-id="'+t.id+'"]');
-      if (!cards.length) return;
+      const cards = cardsById.get(String(t.id));
+      if (!cards?.length) return;
       const template = t.units==="custom" ? resolveCustomFormatValue(t.format) : null;
       const newTxt = fmt(remainingForDisplay(t), t.units, t.ms==="on", template, t.name, t);
       const progress = visualProgress(t);
 
       cards.forEach(card => {
-        const txt = card.querySelector(".big .flip");
+        // Keep reminder/completion processing below active for every timer.
+        if (fullscreenCard && card !== fullscreenCard) return;
+        const nodes = getCardUpdateNodes(card);
+        const { txt } = nodes;
         if (txt && txt.textContent !== newTxt){
           txt.textContent = newTxt;
           txt.style.transform = "perspective(400px) rotateX(16deg)";
-          setTimeout(()=>txt.style.transform = "perspective(400px) rotateX(0deg)", 120);
+          clearTimeout(nodes.flipTimeout);
+          nodes.flipTimeout = setTimeout(()=>txt.style.transform = "perspective(400px) rotateX(0deg)", 120);
         }
 
         const displayStyle = card.dataset.displayStyle || t.style || "bar";
         const timerForVisual = displayStyle === (t.style || "") ? t : { ...t, style: displayStyle };
 
         if (displayStyle === "bar"){
-          const fill = card.querySelector(".progressbar > div");
-          if (fill) fill.style.width = (progress*100).toFixed(2)+"%";
+          const { fill } = nodes;
+          const width = (progress*100).toFixed(2)+"%";
+          if (fill && fill.style.width !== width) fill.style.width = width;
         } else if (["ring","pie","multibar","letters"].includes(displayStyle)){
-          const cvs = card.querySelector("canvas");
+          const { cvs } = nodes;
           if (cvs) drawVisual(cvs, timerForVisual);
           if (card.dataset.proPart === "multibar") updateProMultiBarNote(card, t);
           if (card.dataset.proPart === "letters") updateProLettersNote(card, t);
