@@ -18,7 +18,7 @@ Seven accounts were backed up privately, imported to staging and the closed prod
 - Staging branch: `br-tiny-block-becn682b`.
 - Synthetic integration branch: `br-patient-flower-beelt2x8`; never point the public website here.
 - Production API: `https://br-square-lake-befybru9-hypertimer.compute.c-9.us-east-2.aws.neon.tech`.
-- Website: `https://egga22.github.io/Hyper-Timer/`, GitHub Pages `main` branch.
+- Production websites: `https://egga22.github.io/Hyper-Timer/` (GitHub Pages `main`) and `https://hyper-timer.pages.dev` (Cloudflare Pages). Both were checked and still use RestDB. Preview deployments are deliberately not allowed to access production accounts. Inventory any additional custom production domains before cutover.
 - Production signup is disabled until final activation; this prevents accounts being created in two independent systems during migration.
 - Private backups and environment files are in the checkout's ignored `.private/` directory (directory 0700, files 0600). They contain sensitive data. Keep them off GitHub, Pages, chat, screenshots and shared storage. Preserve a separately encrypted backup before retiring this checkout.
 
@@ -40,7 +40,7 @@ RestDB reference: https://restdb.io/docs/apikeys-and-cors (key management requir
 
 Use a trusted machine in this checkout with private environment files. Never put secrets on command lines, in Git, or in the frontend config. The auth secret must remain stable across redeployments. The deployed API already has its production secret; preserve it.
 
-1. Confirm a private source backup exists, release checks pass, the production API `/health` returns 200, and `/account` remains 503. Confirm the allowed production origin is `https://egga22.github.io`.
+1. Confirm a private source backup exists, release checks pass, the production API `/health` returns 200, and `/account` remains 503. Confirm the allowed production origins include `https://egga22.github.io` and `https://hyper-timer.pages.dev`, plus any verified custom production domains.
 2. Coordinate the RestDB revocation/freeze above. Export the frozen source to a new private filename:
 
    ```sh
