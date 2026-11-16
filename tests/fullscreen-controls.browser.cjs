@@ -37,6 +37,15 @@ const expose = `window.fullscreenTest = {
     await page.locator('#settingsBtn').click();
     const settings = page.locator('#settingsFullscreenControls');
     assert.ok(await settings.isVisible());
+    for (const width of [1280, 390]) {
+      await page.setViewportSize({ width, height: 844 });
+      const options = settings.locator('label');
+      assert.equal(await options.count(), 6);
+      assert.ok(await options.first().isVisible());
+      assert.ok(await settings.evaluate(el => el.scrollWidth <= el.clientWidth));
+      if (process.env.SETTINGS_SCREENSHOTS) await page.screenshot({ path: `/tmp/hyper-settings-${width}.png` });
+    }
+    await page.setViewportSize({ width: 1280, height: 800 });
     await settings.locator('[value="pause"]').check();
     await settings.locator('[value="duplicate"]').check();
     await page.keyboard.press('Escape');
@@ -54,7 +63,7 @@ const expose = `window.fullscreenTest = {
       await page.locator('[data-act="fullscreen"]').click();
     }
     await page.evaluate(() => fullscreenTest.edit('test'));
-    await page.locator('#f_fullscreenOverride').check();
+    await page.locator('#f_fullscreenOverride').selectOption('custom');
     await page.locator('#timerFullscreenControls [value="pause"]').uncheck();
     await page.locator('#timerFullscreenControls [value="duplicate"]').uncheck();
     await page.locator('#saveBtn').click();

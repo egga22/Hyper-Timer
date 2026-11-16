@@ -120,12 +120,17 @@
           </select>
         </div>
       </div>
-      <fieldset class="field">
-        <legend>Full-screen controls</legend>
-        <label><input type="checkbox" id="f_fullscreenOverride"> Override the default for this timer</label>
-        <div id="timerFullscreenControls"></div>
-        <div class="note">Exit Full Screen is always available.</div>
-      </fieldset>
+      <section class="fullscreen-settings" aria-labelledby="timerFullscreenHeading">
+        <div class="fullscreen-settings-heading">
+          <div><h3 id="timerFullscreenHeading">Full-screen controls</h3><p>Choose the buttons available while this timer fills the screen.</p></div>
+          <select id="f_fullscreenOverride" aria-label="Full-screen control settings">
+            <option value="default">Use default</option>
+            <option value="custom">Customize</option>
+          </select>
+        </div>
+        <div id="timerFullscreenControls" class="fullscreen-control-grid"></div>
+        <div class="fullscreen-settings-footnote">Exit Full Screen is always available.</div>
+      </section>
       <div id="color2Field" class="field invisible">
         <label>Secondary color</label>
         <input id="f_color2" type="color" value="#ff6c7b">
@@ -368,11 +373,14 @@
       <button class="btn" value="cancel" style="line-height:1;">✕</button>
     </div>
     <div class="dialog-body settings-body">
-      <fieldset class="settings-section">
-        <legend>Full-screen timer controls</legend>
-        <div class="note">Choose which buttons appear in full screen. Applies to timers using the default. Changes save automatically; Exit Full Screen is always available.</div>
-        <div id="settingsFullscreenControls"></div>
-      </fieldset>
+      <section class="fullscreen-settings" aria-labelledby="fullscreenSettingsHeading">
+        <div class="fullscreen-settings-heading">
+          <div><h3 id="fullscreenSettingsHeading">Full-screen controls</h3><p>Keep your timer focused. Show only the buttons you need.</p></div>
+          <span class="fullscreen-settings-badge">Default for all timers</span>
+        </div>
+        <div id="settingsFullscreenControls" class="fullscreen-control-grid"></div>
+        <div class="fullscreen-settings-footnote"><span>Exit Full Screen is always available.</span><span>Saved automatically · Customize any timer in its editor.</span></div>
+      </section>
       <div id="settingsSignedOut" class="settings-section">
         <div class="note">Sign in to sync timers and unlock experimental features.</div>
         <div class="settings-actions">
