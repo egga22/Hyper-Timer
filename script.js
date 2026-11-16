@@ -4622,6 +4622,15 @@
     applyPreferencesToState(pending);
   });
   
+  $("#settingsFullscreenOpen").addEventListener("click", () => {
+    refreshFullscreenControls();
+    $("#fullscreenSettingsDialog").showModal();
+  });
+  $("#timerFullscreenOpen").addEventListener("click", () => $("#timerFullscreenDialog").showModal());
+  document.querySelectorAll("[data-close-fullscreen]").forEach(button => {
+    button.addEventListener("click", () => document.getElementById(button.dataset.closeFullscreen).close());
+  });
+
   $("#settingsFullscreenControls").addEventListener("change", () => {
     applyPreferencesToState({ ...userPreferences, fullscreenControls: readFullscreenControls($("#settingsFullscreenControls")) });
   });
