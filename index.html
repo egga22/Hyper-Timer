@@ -120,6 +120,12 @@
           </select>
         </div>
       </div>
+      <fieldset class="field">
+        <legend>Full-screen controls</legend>
+        <label><input type="checkbox" id="f_fullscreenOverride"> Override the default for this timer</label>
+        <div id="timerFullscreenControls"></div>
+        <div class="note">Exit Full Screen is always available.</div>
+      </fieldset>
       <div id="color2Field" class="field invisible">
         <label>Secondary color</label>
         <input id="f_color2" type="color" value="#ff6c7b">
@@ -286,11 +292,22 @@
           <div id="loopingAlignRow" class="field invisible">
             <label for="f_loopStartBehavior">Next loop starts</label>
             <select id="f_loopStartBehavior">
-              <option value="restart">When the loop restarts</option>
               <option value="previousEnd">At the previous end</option>
               <option value="sameDuration">The same duration before the next end</option>
+              <option value="offset">A set amount before the next end</option>
               <option value="custom">At a custom time, with weekday overrides (Beta)</option>
             </select>
+            <div id="loopOffsetStartFields" class="field-group invisible">
+              <label for="f_loopStartAmount">Start this much before the next end</label>
+              <input id="f_loopStartAmount" type="number" min="1" max="10000" step="1" value="1">
+              <label for="f_loopStartUnit">Unit</label>
+              <select id="f_loopStartUnit">
+                <option value="minute">Minute(s)</option><option value="hour">Hour(s)</option>
+                <option value="day" selected>Day(s)</option><option value="week">Week(s)</option>
+                <option value="month">Month(s)</option><option value="year">Year(s)</option>
+              </select>
+              <div class="note">Applies to future loops. Days and larger units use local calendar dates; months and years clamp to the last valid day.</div>
+            </div>
             <div id="loopCustomStartFields" class="field-group invisible">
               <label for="f_loopStartDay">Start date, relative to the next end</label>
               <select id="f_loopStartDay"><option value="0">Same day</option><option value="-1">Previous day</option></select>
@@ -362,6 +379,11 @@
       <button class="btn" value="cancel" style="line-height:1;">✕</button>
     </div>
     <div class="dialog-body settings-body">
+      <fieldset class="settings-section">
+        <legend>Full-screen timer controls</legend>
+        <div class="note">Choose which buttons appear in full screen. Applies to timers using the default. Changes save automatically; Exit Full Screen is always available.</div>
+        <div id="settingsFullscreenControls"></div>
+      </fieldset>
       <div id="settingsSignedOut" class="settings-section">
         <div class="note">Sign in to sync timers and unlock experimental features.</div>
         <div class="settings-actions">
