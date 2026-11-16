@@ -157,6 +157,40 @@
   const tplBtn = $("#tplBtn");
 
   let fallbackFullscreenCard = null;
+  let previousNativeFullscreenCard = null;
+  const fullscreenRedrawCards = new Set();
+  let fullscreenRedrawFrame = null;
+
+  function scheduleFullscreenRedraw(card){
+    if (!card) return;
+    fullscreenRedrawCards.add(card);
+    if (fullscreenRedrawFrame !== null) return;
+    fullscreenRedrawFrame = requestAnimationFrame(() => {
+      fullscreenRedrawFrame = null;
+      fullscreenRedrawCards.forEach(target => {
+        if (!target.isConnected) return;
+        const timer = timers.find(t => String(t.id) === target.dataset.id);
+        const canvas = target.querySelector('canvas');
+        if (!timer || !canvas) return;
+        const style = target.dataset.displayStyle || timer.style;
+        drawVisual(canvas, style === timer.style ? timer : { ...timer, style });
+      });
+      fullscreenRedrawCards.clear();
+    });
+  }
+
+  function handleNativeFullscreenChange(){
+    const active = activeNativeFullscreenElement();
+    scheduleFullscreenRedraw(previousNativeFullscreenCard);
+    scheduleFullscreenRedraw(active);
+    previousNativeFullscreenCard = active;
+  }
+  document.addEventListener('fullscreenchange', handleNativeFullscreenChange);
+  document.addEventListener('webkitfullscreenchange', handleNativeFullscreenChange);
+  document.addEventListener('MSFullscreenChange', handleNativeFullscreenChange);
+  window.addEventListener('resize', () => {
+    scheduleFullscreenRedraw(activeNativeFullscreenElement() || fallbackFullscreenCard);
+  });
 
   function activeNativeFullscreenElement(){
     return document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement || null;
@@ -201,6 +235,7 @@
     
     // Remove fullscreen classes and data attributes
     target.classList.remove("fullscreen-fallback");
+    scheduleFullscreenRedraw(target);
     if (target.dataset) delete target.dataset.fullscreenFallback;
     
     // Clear the global reference if this was the tracked card
@@ -223,6 +258,7 @@
     card.classList.add("fullscreen-fallback");
     if (card.dataset) card.dataset.fullscreenFallback = "1";
     document.body.classList.add("has-fullscreen-fallback");
+    scheduleFullscreenRedraw(card);
   }
 
   function handleEscapeForFallback(ev){
@@ -316,6 +352,8 @@
     loopMonthlyOrdinalRow: $("#loopMonthlyOrdinalRow"),
     loopAlignRow: $("#loopingAlignRow"),
     loopStartBehavior: $("#f_loopStartBehavior"),
+    loopStartAmount: $("#f_loopStartAmount"),
+    loopStartUnit: $("#f_loopStartUnit"),
     loopStartDay: $("#f_loopStartDay"),
     loopStartTime: $("#f_loopStartTime"),
     loopShortTermSummary: $("#loopShortTermSummary"),
@@ -1048,8 +1086,10 @@
       monthlyOrdinal,
       monthlyWeekday,
       alignStartToEnd,
-      startBehavior: ["restart", "previousEnd", "sameDuration", "custom"].includes(base.startBehavior)
-        ? base.startBehavior : (alignStartToEnd ? "previousEnd" : "restart"),
+      startBehavior: ["previousEnd", "sameDuration", "offset", "custom"].includes(base.startBehavior)
+        ? base.startBehavior : "previousEnd",
+      startAmount: clamp(Math.floor(Number(base.startAmount) || 1), 1, 10000),
+      startUnit: ["minute", "hour", "day", "week", "month", "year"].includes(base.startUnit) ? base.startUnit : "day",
       startDayOffset: Number(base.startDayOffset) === -1 ? -1 : 0,
       startTime: /^([01]\d|2[0-3]):[0-5]\d$/.test(base.startTime) ? base.startTime : "08:00",
       startWeekdays: Array.from({length:7}, (_, day) => {
@@ -1058,6 +1098,53 @@
       }),
       events
     };
+  }
+
+  const FULLSCREEN_CONTROLS = [
+    ["pause", "Pause / Resume"], ["duplicate", "Copy timer"],
+    ["prestige", "Prestige"], ["tplsave", "Save template"],
+    ["edit", "Edit"], ["delete", "Delete"]
+  ];
+
+  function sanitizeFullscreenControls(value) {
+    return FULLSCREEN_CONTROLS.map(([key]) => key).filter(key => Array.isArray(value) && value.includes(key));
+  }
+
+  function effectiveFullscreenControls(timer) {
+    return sanitizeFullscreenControls(Array.isArray(timer.fullscreenControls)
+      ? timer.fullscreenControls : userPreferences.fullscreenControls);
+  }
+
+  function fillFullscreenControls(container, selected, disabled = false) {
+    container.replaceChildren();
+    for (const [key, title] of FULLSCREEN_CONTROLS) {
+      const label = document.createElement("label");
+      label.style.display = "block";
+      const input = document.createElement("input");
+      input.type = "checkbox";
+      input.value = key;
+      input.checked = selected.includes(key);
+      input.disabled = disabled;
+      label.append(input, document.createTextNode(` ${title}`));
+      container.append(label);
+    }
+  }
+
+  function readFullscreenControls(container) {
+    return Array.from(container.querySelectorAll("input:checked"), input => input.value);
+  }
+
+  function refreshFullscreenControls() {
+    const container = $("#settingsFullscreenControls");
+    fillFullscreenControls(container, sanitizeFullscreenControls(userPreferences.fullscreenControls));
+    document.querySelectorAll(".card").forEach(card => {
+      const timer = timers.find(timer => timer.id === card.dataset.id);
+      if (!timer) return;
+      const selected = effectiveFullscreenControls(timer);
+      card.querySelectorAll(".actions [data-act]").forEach(button => {
+        button.classList.toggle("fullscreen-visible", selected.includes(button.dataset.act));
+      });
+    });
   }
 
   function sanitizePreferences(prefs) {
@@ -1076,6 +1163,7 @@
       autoDisplayMode: sanitizeAutoDisplayMode(base.autoDisplayMode ?? base.autoMode ?? base.autoUnitsMode),
       defaultCustomFormat: sanitizeCustomFormat(base.defaultCustomFormat ?? base.customFormat),
       loopsEnabled,
+      fullscreenControls: sanitizeFullscreenControls(base.fullscreenControls),
       percentHoverEnabled,
       saveAnimationBehavior: ["ask", "reset", "continue"].includes(base.saveAnimationBehavior) ? base.saveAnimationBehavior : "ask"
     };
@@ -1130,6 +1218,8 @@
       monthlyWeekday: f.loopMonthlyWeekday ? f.loopMonthlyWeekday.value : existing.monthlyWeekday,
       alignStartToEnd: f.loopStartBehavior.value === "previousEnd",
       startBehavior: f.loopStartBehavior.value,
+      startAmount: Number(f.loopStartAmount.value),
+      startUnit: f.loopStartUnit.value,
       startDayOffset: Number(f.loopStartDay.value),
       startTime: f.loopStartTime.value,
       startWeekdays: $$("[data-loop-start-day]").map(input => input.value),
@@ -1223,6 +1313,7 @@
     updateDefaultSettingsSection();
     updateLoopFeatureToggle();
     updatePercentHoverToggle();
+    refreshFullscreenControls();
     updateLoopingSectionVisibility();
   }
 
@@ -2487,6 +2578,22 @@
   function loopStartTimestamp(config, nextTarget, previousTarget, total, nowTs) {
     if (config.startBehavior === "previousEnd") return previousTarget;
     if (config.startBehavior === "sameDuration") return nextTarget - Math.max(1, total);
+    if (config.startBehavior === "offset") {
+      const amount = config.startAmount;
+      if (config.startUnit === "minute") return nextTarget - amount * 60000;
+      if (config.startUnit === "hour") return nextTarget - amount * 3600000;
+      const date = new Date(nextTarget);
+      if (config.startUnit === "day" || config.startUnit === "week") {
+        date.setDate(date.getDate() - amount * (config.startUnit === "week" ? 7 : 1));
+      } else {
+        const day = date.getDate();
+        date.setDate(1);
+        date.setMonth(date.getMonth() - amount * (config.startUnit === "year" ? 12 : 1));
+        const lastDay = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+        date.setDate(Math.min(day, lastDay));
+      }
+      return date.getTime();
+    }
     if (config.startBehavior === "custom") {
       const date = new Date(nextTarget);
       date.setDate(date.getDate() + config.startDayOffset);
@@ -2495,13 +2602,14 @@
       date.setHours(hour, minute, 0, 0);
       return date.getTime();
     }
-    return nowTs;
+    return previousTarget;
   }
 
   function updateLoopStartFields() {
     const customOption = f.loopStartBehavior.querySelector('option[value="custom"]');
     customOption.disabled = !userCanAccessShortTermSchedule();
     $("#loopCustomStartFields").classList.toggle("invisible", f.loopStartBehavior.value !== "custom");
+    $("#loopOffsetStartFields").classList.toggle("invisible", f.loopStartBehavior.value !== "offset");
   }
 
   function handleLoopRestart(t, total){
@@ -2976,6 +3084,8 @@
       smartMethod: "manifold", smartUrl: ""
     };
 
+    $("#f_fullscreenOverride").checked = Array.isArray(draft.fullscreenControls);
+    fillFullscreenControls($("#timerFullscreenControls"), effectiveFullscreenControls(draft), !Array.isArray(draft.fullscreenControls));
     f.name.value = draft.name||""; f.mode.value=draft.mode||"duration"; f.style.value=draft.style||"bar"; f.color.value=draft.color||"#6c7bff";
     if (f.color2) f.color2.value = draft.color2 || draft.color || "#6c7bff";
     f.units.value = draft.units || "auto";
@@ -3053,6 +3163,8 @@
       f.loopEnabled.checked = loopsAllowed && supportedMode && sanitizedLoop.enabled;
     }
     f.loopStartBehavior.value = sanitizedLoop.startBehavior;
+    f.loopStartAmount.value = String(sanitizedLoop.startAmount);
+    f.loopStartUnit.value = sanitizedLoop.startUnit;
     f.loopStartDay.value = String(sanitizedLoop.startDayOffset);
     f.loopStartTime.value = sanitizedLoop.startTime;
     $$("[data-loop-start-day]").forEach((input, day) => { input.value = sanitizedLoop.startWeekdays[day]; });
@@ -3136,6 +3248,7 @@
   function openSettingsDialog() {
     if (!settingsDialog) return;
     updateUIForLoginState();
+    refreshFullscreenControls();
     try {
       settingsDialog.showModal ? settingsDialog.showModal() : settingsDialog.setAttribute("open", "");
     } catch (e) {
@@ -3588,6 +3701,7 @@
     const triggers = await collectTrEntries(new Map());
     const tpl = {
       id: uid("tpl_"), name: f.name.value.trim() || "Template", style: f.style.value, color: f.color.value,
+      fullscreenControls: $("#f_fullscreenOverride").checked ? readFullscreenControls($("#timerFullscreenControls")) : null,
       color2: f.color2.value || f.color.value,
       units: f.units.value,
       format: resolveFormatForUnits(f.units.value, f.format.value),
@@ -3652,6 +3766,10 @@
       ? (f.when && f.when.value ? parseLocalDateTime(f.when.value) : existing?.targetMs ?? null)
       : (existing?.mode === "datetime" ? existing.targetMs : null);
     const loopConfig = gatherLoopConfigFromForm(f.mode.value, existing?.loopConfig ?? null, loopReferenceMs);
+    if (loopConfig.enabled && loopConfig.startBehavior === "offset" && !f.loopStartAmount.checkValidity()) {
+      f.loopStartAmount.reportValidity();
+      return;
+    }
     if (loopConfig.enabled && loopConfig.startBehavior === "custom") {
       if (!userCanAccessShortTermSchedule()) { alert("Custom loop starts require an Owner or Beta Tester account."); return; }
       if (!f.loopStartTime.value) { alert("Choose a default loop start time."); return; }
@@ -3903,6 +4021,10 @@
     const pauseBtn = (t.mode==="datetime" || t.mode==="smart") ? "" : `<button class="action-btn" data-act="pause" title="${t.paused?'Resume':'Pause'}">⏯︎</button>`;
     const fullscreenBtn = `<button class="action-btn" data-act="fullscreen" title="Fullscreen">⛶</button>`;
     actions.innerHTML = `${pauseBtn}${fullscreenBtn}<button class="action-btn" data-act="duplicate" title="Duplicate timer" aria-label="Duplicate timer">⧉</button><button class="action-btn" data-act="prestige" title="Prestige">★</button><button class="action-btn" data-act="tplsave" title="Save template">⇪</button><button class="action-btn" data-act="edit" title="Edit">✎</button><button class="action-btn" data-act="delete" title="Delete">🗑</button>`;
+    const fullscreenControls = effectiveFullscreenControls(t);
+    actions.querySelectorAll("[data-act]").forEach(button => {
+      button.classList.toggle("fullscreen-visible", fullscreenControls.includes(button.dataset.act));
+    });
     card.appendChild(actions);
 
     const title = document.createElement("div");
@@ -4048,10 +4170,7 @@
           return;
         }
         
-        // If another card is in native fullscreen or fallback, exit it first
-        if (activeNative && activeNative !== card){
-          await exitNativeFullscreenIfActive();
-        }
+        // Native fullscreen can switch elements directly, without an exit round trip.
         if (fallbackFullscreenCard && fallbackFullscreenCard !== card){
           deactivateFallbackFullscreen(fallbackFullscreenCard);
         }
@@ -4059,6 +4178,7 @@
         // Try to enter native fullscreen for this card
         const success = await tryEnterNativeFullscreen(card);
         if (!success){
+          if (activeNative) await exitNativeFullscreenIfActive();
           // Fallback to CSS fullscreen if native fails
           activateFallbackFullscreen(card);
         }
@@ -4412,31 +4532,64 @@
 
   function escapeHtml(str){ return String(str).replace(/[&<>"']/g, s=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;"}[s])); }
 
+  // Cards are replaced on render; weak keys let old DOM and references be collected.
+  const cardUpdateNodes = new WeakMap();
+  function getCardUpdateNodes(card){
+    let nodes = cardUpdateNodes.get(card);
+    if (!nodes){
+      nodes = {
+        txt: card.querySelector('.big .flip'),
+        fill: card.querySelector('.progressbar > div'),
+        cvs: card.querySelector('canvas'),
+        flipTimeout: null
+      };
+      cardUpdateNodes.set(card, nodes);
+    }
+    return nodes;
+  }
+
+  function groupTimerCards(grid){
+    const groups = new Map();
+    grid.querySelectorAll('.card[data-id]').forEach(card => {
+      const id = card.dataset.id;
+      if (!groups.has(id)) groups.set(id, []);
+      groups.get(id).push(card);
+    });
+    return groups;
+  }
+
   function tick(){
+    const cardsById = groupTimerCards(grid);
+    const fullscreenCard = activeNativeFullscreenElement() || fallbackFullscreenCard;
     timers.forEach(t=>{
       if (t.style === "pro") ensureProSplitState(t);
-      const cards = grid.querySelectorAll('.card[data-id="'+t.id+'"]');
-      if (!cards.length) return;
+      const cards = cardsById.get(String(t.id));
+      if (!cards?.length) return;
       const template = t.units==="custom" ? resolveCustomFormatValue(t.format) : null;
       const newTxt = fmt(remainingForDisplay(t), t.units, t.ms==="on", template, t.name, t);
       const progress = visualProgress(t);
 
       cards.forEach(card => {
-        const txt = card.querySelector(".big .flip");
+        // Keep reminder/completion processing below active for every timer.
+        if (fullscreenCard && card !== fullscreenCard) return;
+        const nodes = getCardUpdateNodes(card);
+        const { txt } = nodes;
         if (txt && txt.textContent !== newTxt){
           txt.textContent = newTxt;
           txt.style.transform = "perspective(400px) rotateX(16deg)";
-          setTimeout(()=>txt.style.transform = "perspective(400px) rotateX(0deg)", 120);
+          clearTimeout(nodes.flipTimeout);
+          nodes.flipTimeout = setTimeout(()=>txt.style.transform = "perspective(400px) rotateX(0deg)", 120);
         }
 
         const displayStyle = card.dataset.displayStyle || t.style || "bar";
         const timerForVisual = displayStyle === (t.style || "") ? t : { ...t, style: displayStyle };
 
         if (displayStyle === "bar"){
-          const fill = card.querySelector(".progressbar > div");
-          if (fill) fill.style.width = (progress*100).toFixed(2)+"%";
+          const { fill } = nodes;
+          const width = (progress*100).toFixed(2)+"%";
+          if (fill && fill.style.width !== width) fill.style.width = width;
         } else if (["ring","pie","multibar","letters"].includes(displayStyle)){
-          const cvs = card.querySelector("canvas");
+          const { cvs } = nodes;
           if (cvs) drawVisual(cvs, timerForVisual);
           if (card.dataset.proPart === "multibar") updateProMultiBarNote(card, t);
           if (card.dataset.proPart === "letters") updateProLettersNote(card, t);
@@ -4494,6 +4647,13 @@
     applyPreferencesToState(pending);
   });
   
+  $("#settingsFullscreenControls").addEventListener("change", () => {
+    applyPreferencesToState({ ...userPreferences, fullscreenControls: readFullscreenControls($("#settingsFullscreenControls")) });
+  });
+  $("#f_fullscreenOverride").addEventListener("change", event => {
+    $("#timerFullscreenControls").querySelectorAll("input").forEach(input => { input.disabled = !event.target.checked; });
+  });
+
   if (settingsPercentHover) settingsPercentHover.addEventListener('change', () => {
     const pending = sanitizePreferences({ ...userPreferences, percentHoverEnabled: settingsPercentHover.checked });
     applyPreferencesToState(pending);
