@@ -120,6 +120,12 @@
           </select>
         </div>
       </div>
+      <fieldset class="field">
+        <legend>Full-screen controls</legend>
+        <label><input type="checkbox" id="f_fullscreenOverride"> Override the default for this timer</label>
+        <div id="timerFullscreenControls"></div>
+        <div class="note">Exit Full Screen is always available.</div>
+      </fieldset>
       <div id="color2Field" class="field invisible">
         <label>Secondary color</label>
         <input id="f_color2" type="color" value="#ff6c7b">
@@ -362,6 +368,11 @@
       <button class="btn" value="cancel" style="line-height:1;">✕</button>
     </div>
     <div class="dialog-body settings-body">
+      <fieldset class="settings-section">
+        <legend>Full-screen timer controls</legend>
+        <div class="note">Choose which buttons appear in full screen. Applies to timers using the default. Changes save automatically; Exit Full Screen is always available.</div>
+        <div id="settingsFullscreenControls"></div>
+      </fieldset>
       <div id="settingsSignedOut" class="settings-section">
         <div class="note">Sign in to sync timers and unlock experimental features.</div>
         <div class="settings-actions">
