@@ -28,6 +28,9 @@ const assert=require('node:assert/strict');
   await page.locator('#auth_email').fill(process.env.REAL_API_URL?'beta@example.test':'fixture@example.test'); await page.locator('#auth_password').fill(process.env.REAL_API_URL?'beta-password':'original-password'); await page.locator('#authSubmitBtn').click();
   await page.waitForFunction(()=>!document.querySelector('#authDialog').open);
   await page.locator('#settingsBtn').click();
+  await page.reload();
+  await page.waitForFunction(()=>document.querySelector('#settingsRoleDisplay').textContent.includes('Beta Tester'));
+  await page.locator('#settingsBtn').click();
   const details=page.locator('#settingsPasswordSection'); assert.equal(await details.getAttribute('open'),null);
   await details.locator('summary').click();
   await page.locator('#settingsCurrentPassword').fill(process.env.REAL_API_URL?'beta-password':'original-password');
@@ -40,6 +43,7 @@ const assert=require('node:assert/strict');
   assert.equal(requests.filter(r=>r.path==='/auth/change-password').length,1);
   assert.equal(requests.find(r=>r.path==='/auth/change-password').body.revokeOtherSessions,true);
   assert.deepEqual(errors,[]);
+  if(process.env.REAL_API_URL) await page.evaluate(()=>window.HyperTimerCloud.changePassword('new-password','beta-password'));
   console.log('PASS optional password UI: no automatic opening, mismatch blocked, change saved, inputs cleared, no browser errors. Backend: '+(process.env.REAL_API_URL?'deployed synthetic integration':'mocked'));
  } finally {await browser.close();}
 })().catch(e=>{console.error(e);process.exitCode=1});
