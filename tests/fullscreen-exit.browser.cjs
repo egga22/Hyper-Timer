@@ -23,7 +23,7 @@ const expose = `window.fullscreenTest = {
     await page.route('**/*', route => {
       const url = new URL(route.request().url());
       const name = url.pathname === '/' ? 'index.html' : url.pathname.slice(1);
-      if (url.hostname !== 'hypertimer.test' || !['index.html', 'script.js', 'style.css', 'sw.js'].includes(name)) {
+      if (url.hostname !== 'hypertimer.test' || !['index.html', 'script.js', 'style.css', 'sw.js', 'cloud.js', 'cloud-config.js'].includes(name)) {
         return route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
       }
       let body = fs.readFileSync(path.join(root, name), 'utf8');
