@@ -140,9 +140,8 @@
   }
 
   // --- START: Authentication and Sync Configuration ---
-  const RESTDB_URL = 'https://timerapp-1f65.restdb.io/rest/accounts'; // <-- IMPORTANT: SET THIS
-  const API_KEY = '68a65f75b349a309704b6cab'; // <-- IMPORTANT: SET THIS
-  
+  const cloud = window.HyperTimerCloud;
+
   let currentUser = null;
   let isSyncing = false;
   // --- END: Authentication and Sync Configuration ---
@@ -2085,15 +2084,14 @@
     cloudAccountMissing = false;
     try {
       const userRaw = localStorage.getItem(KEY_USER);
-      if (userRaw) {
+      if (userRaw && cloud?.hasSession()) {
         currentUser = JSON.parse(userRaw);
         if (currentUser) {
           if (!currentUser.id && currentUser._id) {
             currentUser.id = currentUser._id;
           }
           delete currentUser._id;
-          const storedRole = currentUser.role ?? currentUser.Role;
-          currentUser.role = normalizeRole(storedRole);
+          currentUser.role = ROLE_STANDARD;
           delete currentUser.Role;
           localStorage.setItem(KEY_USER, JSON.stringify(currentUser));
         }
@@ -3208,7 +3206,7 @@
       }
     } catch (error) {
         console.error("Auth error:", error);
-        alert("An error occurred. Please try again.");
+        alert(error.message || "An error occurred. Please try again.");
     } finally {
         submitBtn.disabled = false;
         const currentModeIsSignUp = $("#authTitle").textContent === "Sign Up";
@@ -3216,61 +3214,34 @@
     }
   }
 
+  const passwordSave = $("#settingsPasswordSave");
+  if (passwordSave) passwordSave.addEventListener("click", async () => {
+    const current = $("#settingsCurrentPassword");
+    const next = $("#settingsNewPassword");
+    const confirmPassword = $("#settingsConfirmPassword");
+    const status = $("#settingsPasswordStatus");
+    if (!current.value || next.value.length < 8 || next.value.length > 1024 || next.value !== confirmPassword.value) {
+      status.textContent = "Enter your current password and matching new passwords (8–1024 characters).";
+      return;
+    }
+    passwordSave.disabled = true;
+    status.textContent = "Saving…";
+    try {
+      await cloud.changePassword(current.value, next.value);
+      current.value = next.value = confirmPassword.value = "";
+      status.textContent = "Password changed. Other sessions have been signed out.";
+    } catch (error) { status.textContent = error.message; }
+    finally { passwordSave.disabled = false; }
+  });
+
   async function handleSignUp(email, password) {
-    const checkResponse = await fetch(`${RESTDB_URL}?q={"email":"${email}"}`, {
-        headers: { 'x-apikey': API_KEY }
-    });
-    if (!checkResponse.ok) throw new Error("Network error checking user.");
-    const existingUsers = await checkResponse.json();
-    if (existingUsers.length > 0) {
-        alert("An account with this email already exists. Please log in.");
-        return;
-    }
-
-    const initialSettings = sanitizePreferences(DEFAULT_PREFERENCES);
-    const newUser = {
-        email,
-        password,
-        Role: ROLE_STANDARD,
-        timers: [], // Use JSON type, send empty array
-        last_modified: new Date().toISOString(), // Use DateTime type, send ISO string
-        Settings: initialSettings,
-        preferences: initialSettings
-    };
-    
-    const createResponse = await fetch(RESTDB_URL, {
-        method: 'POST',
-        headers: { 'x-apikey': API_KEY, 'Content-Type': 'application/json' },
-        body: JSON.stringify(newUser)
-    });
-
-    if (createResponse.ok) {
-        alert("Account created successfully! Please log in.");
-        closeAuthDialog();
-        openAuthDialog(false);
-    } else {
-        alert("Failed to create account. Server returned an error.");
-    }
+    await cloud.signup(email, password);
+    closeAuthDialog();
+    openAuthDialog(false);
   }
 
   async function handleLogin(email, password) {
-    const response = await fetch(`${RESTDB_URL}?q={"email":"${email}"}`, {
-        headers: { 'x-apikey': API_KEY, }
-    });
-    if (!response.ok) throw new Error("Network error fetching user.");
-    const users = await response.json();
-
-    if (users.length === 0) {
-        alert("Error: No account found with that email.");
-        return;
-    }
-
-    const user = users[0];
-    if (user.password !== password) {
-        alert("Error: Incorrect password.");
-        return;
-    }
-
+    const user = await cloud.login(email, password);
     currentUser = { id: user._id, email: user.email, role: extractRoleFromRecord(user) };
     cloudAccountMissing = false;
     localStorage.setItem(KEY_USER, JSON.stringify(currentUser));
@@ -3280,12 +3251,12 @@
     renderPreferencesStatus();
     updateUIForLoginState();
     closeAuthDialog();
-
     await syncTimers();
   }
 
-  function handleLogout() {
+  async function handleLogout() {
     if (confirm("Are you sure you want to log out? Your timers will remain on this device but will no longer sync.")) {
+      try { await cloud.logout(); } catch {}
       closeSettingsDialog();
       currentUser = null;
       cloudAccountMissing = false;
@@ -3312,21 +3283,8 @@
       }
 
       try {
-        const response = await fetch(`${RESTDB_URL}/${currentUser.id}`, {
-            headers: { 'x-apikey': API_KEY }
-        });
-        if (response.status === 404) {
-          cloudAccountMissing = true;
-          applyPreferencesToState(localStoredPreferences, { save: false });
-          if (userCanAccessDefaultSettings()) {
-            setPreferencesStatus("Cloud account not found. Defaults will stay local.", "error", { persist: true });
-          }
-          alert('Cloud account not found. Your timers and defaults will stay local until it is restored.');
-          return;
-        }
-        if (!response.ok) throw new Error("Could not fetch remote data.");
-
-        const remoteUser = await response.json();
+        const remoteUser = await cloud.account();
+        if (remoteUser._id !== currentUser.id) throw new Error("Account identity changed. Log out and sign in again.");
         const remoteTimersRaw = Array.isArray(remoteUser.timers) ? remoteUser.timers : [];
         const remoteTimers = remoteTimersRaw.map(migrateTimer);
         const remoteRole = extractRoleFromRecord(remoteUser);
@@ -3488,7 +3446,12 @@
         alert('Sync complete!');
       } catch (error) {
           console.error("Sync failed:", error);
-          alert("Sync failed. Please check your connection and try again.");
+          if (error.status === 401) {
+            currentUser = null;
+            localStorage.removeItem(KEY_USER);
+            updateUIForLoginState();
+          }
+          alert(error.message || "Sync failed. Your local data is retained.");
       } finally {
           isSyncing = false;
           if (settingsSyncBtn) {
@@ -3505,19 +3468,7 @@
     if (cloudAccountMissing) {
       throw new Error("account-not-found");
     }
-    const response = await fetch(`${RESTDB_URL}/${currentUser.id}`, {
-      method: 'PATCH',
-      headers: { 'x-apikey': API_KEY, 'Content-Type': 'application/json' },
-      body: JSON.stringify(partialPayload)
-    });
-    if (response.status === 404) {
-      cloudAccountMissing = true;
-      throw new Error("account-not-found");
-    }
-    if (!response.ok) {
-      throw new Error(`Server responded with ${response.status}`);
-    }
-    return response;
+    return cloud.patch(partialPayload);
   }
 
   async function pushTimersToCloud(timersArray, timestampNumber) {

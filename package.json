@@ -1,0 +1,22 @@
+{
+  "name": "hyper-timer",
+  "private": true,
+  "scripts": {
+    "test": "node --test tests/*.test.cjs tests/*.test.mjs",
+    "backend:build": "node backend/build.mjs",
+    "backend:init": "node backend/migrate.mjs init",
+    "migration:export": "node backend/migrate.mjs export",
+    "migration:import": "node backend/migrate.mjs import",
+    "migration:verify": "node backend/migrate.mjs verify"
+  },
+  "dependencies": {
+    "@neon/functions": "0.11.0",
+    "better-auth": "1.7.25",
+    "hono": "^4.11.0",
+    "pg": "^8.16.3"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.1",
+    "playwright": "1.65.1"
+  }
+}

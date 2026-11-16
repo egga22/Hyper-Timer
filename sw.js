@@ -1,5 +1,5 @@
-const CACHE_NAME = "hypertimer-shell-v1";
-const APP_SHELL = ["./", "./index.html", "./style.css", "./script.js"];
+const CACHE_NAME = "hypertimer-shell-v2";
+const APP_SHELL = ["./", "./index.html", "./style.css", "./script.js", "./cloud-config.js", "./cloud.js"];
 
 self.addEventListener("install", event => {
   event.waitUntil(
