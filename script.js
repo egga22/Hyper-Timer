@@ -1115,13 +1115,15 @@
     container.replaceChildren();
     for (const [key, title] of FULLSCREEN_CONTROLS) {
       const label = document.createElement("label");
-      label.style.display = "block";
+      label.className = "fullscreen-control-option";
       const input = document.createElement("input");
       input.type = "checkbox";
       input.value = key;
       input.checked = selected.includes(key);
       input.disabled = disabled;
-      label.append(input, document.createTextNode(` ${title}`));
+      const text = document.createElement("span");
+      text.textContent = title;
+      label.append(input, text);
       container.append(label);
     }
   }
@@ -3062,7 +3064,7 @@
       smartMethod: "manifold", smartUrl: ""
     };
 
-    $("#f_fullscreenOverride").checked = Array.isArray(draft.fullscreenControls);
+    $("#f_fullscreenOverride").value = Array.isArray(draft.fullscreenControls) ? "custom" : "default";
     fillFullscreenControls($("#timerFullscreenControls"), effectiveFullscreenControls(draft), !Array.isArray(draft.fullscreenControls));
     f.name.value = draft.name||""; f.mode.value=draft.mode||"duration"; f.style.value=draft.style||"bar"; f.color.value=draft.color||"#6c7bff";
     if (f.color2) f.color2.value = draft.color2 || draft.color || "#6c7bff";
@@ -3677,7 +3679,7 @@
     const triggers = await collectTrEntries(new Map());
     const tpl = {
       id: uid("tpl_"), name: f.name.value.trim() || "Template", style: f.style.value, color: f.color.value,
-      fullscreenControls: $("#f_fullscreenOverride").checked ? readFullscreenControls($("#timerFullscreenControls")) : null,
+      fullscreenControls: $("#f_fullscreenOverride").value === "custom" ? readFullscreenControls($("#timerFullscreenControls")) : null,
       color2: f.color2.value || f.color.value,
       units: f.units.value,
       format: resolveFormatForUnits(f.units.value, f.format.value),
@@ -3754,7 +3756,7 @@
       })) { alert("Each same-day start time must be before the end time. Choose Previous day for an overnight timer."); return; }
     }
     const base = {
-      fullscreenControls: $("#f_fullscreenOverride").checked ? readFullscreenControls($("#timerFullscreenControls")) : null,
+      fullscreenControls: $("#f_fullscreenOverride").value === "custom" ? readFullscreenControls($("#timerFullscreenControls")) : null,
       id: editId || uid("t_"), name: f.name.value.trim() || "Untitled", style: f.style.value, color: f.color.value,
       color2: f.color2.value || f.color.value,
       units: f.units.value,
@@ -4620,11 +4622,20 @@
     applyPreferencesToState(pending);
   });
   
+  $("#settingsFullscreenOpen").addEventListener("click", () => {
+    refreshFullscreenControls();
+    $("#fullscreenSettingsDialog").showModal();
+  });
+  $("#timerFullscreenOpen").addEventListener("click", () => $("#timerFullscreenDialog").showModal());
+  document.querySelectorAll("[data-close-fullscreen]").forEach(button => {
+    button.addEventListener("click", () => document.getElementById(button.dataset.closeFullscreen).close());
+  });
+
   $("#settingsFullscreenControls").addEventListener("change", () => {
     applyPreferencesToState({ ...userPreferences, fullscreenControls: readFullscreenControls($("#settingsFullscreenControls")) });
   });
   $("#f_fullscreenOverride").addEventListener("change", event => {
-    $("#timerFullscreenControls").querySelectorAll("input").forEach(input => { input.disabled = !event.target.checked; });
+    $("#timerFullscreenControls").querySelectorAll("input").forEach(input => { input.disabled = event.target.value !== "custom"; });
   });
 
   if (settingsPercentHover) settingsPercentHover.addEventListener('change', () => {

@@ -35,14 +35,29 @@ const expose = `window.fullscreenTest = {
     await page.goto('https://hypertimer.test');
     await page.waitForFunction(() => !!window.fullscreenTest);
     await page.locator('#settingsBtn').click();
+    assert.equal(await page.locator('#settingsFullscreenControls').isVisible(), false);
+    await page.locator('#settingsFullscreenOpen').click();
     const settings = page.locator('#settingsFullscreenControls');
     assert.ok(await settings.isVisible());
+    for (const width of [1280, 390]) {
+      await page.setViewportSize({ width, height: 844 });
+      const options = settings.locator('label');
+      assert.equal(await options.count(), 6);
+      assert.ok(await options.first().isVisible());
+      assert.ok(await settings.evaluate(el => el.scrollWidth <= el.clientWidth));
+      if (process.env.SETTINGS_SCREENSHOTS) await page.screenshot({ path: `/tmp/hyper-settings-${width}.png` });
+    }
+    await page.setViewportSize({ width: 1280, height: 800 });
     await settings.locator('[value="pause"]').check();
     await settings.locator('[value="duplicate"]').check();
     await page.keyboard.press('Escape');
+    assert.ok(await page.locator('#settingsDialog').isVisible());
+    await page.keyboard.press('Escape');
     await page.reload();
     await page.locator('#settingsBtn').click();
+    await page.locator('#settingsFullscreenOpen').click();
     assert.ok(await settings.locator('[value="pause"]').isChecked());
+    await page.keyboard.press('Escape');
     await page.keyboard.press('Escape');
     await page.evaluate(() => fullscreenTest.set([{ id: 'test', name: 'Controls', mode: 'duration', style: 'bar', duration: 60000, total0: 60000, start: Date.now(), units: 'hms', color: '#6c7bff', triggers: [] }]));
     for (const fallback of [false, true]) {
@@ -54,9 +69,11 @@ const expose = `window.fullscreenTest = {
       await page.locator('[data-act="fullscreen"]').click();
     }
     await page.evaluate(() => fullscreenTest.edit('test'));
-    await page.locator('#f_fullscreenOverride').check();
+    await page.locator('#timerFullscreenOpen').click();
+    await page.locator('#f_fullscreenOverride').selectOption('custom');
     await page.locator('#timerFullscreenControls [value="pause"]').uncheck();
     await page.locator('#timerFullscreenControls [value="duplicate"]').uncheck();
+    await page.locator('#timerFullscreenDialog .primary').click();
     await page.locator('#saveBtn').click();
     if (await page.locator('#saveAnimationDialog').isVisible()) await page.locator('#saveAnimationDialog [value="continue"]').click();
     await page.waitForFunction(() => !document.querySelector('#editor').open);
