@@ -121,7 +121,7 @@
         </div>
       </div>
       <button type="button" class="fullscreen-settings-launch" id="timerFullscreenOpen" aria-haspopup="dialog" aria-controls="timerFullscreenDialog">
-        <span><strong>Full screen</strong><span class="note">Set layout, text, and controls for this timer.</span></span><span aria-hidden="true">›</span>
+        <span><strong>Full screen</strong><span class="note">Set layout, controls, and screen wake for this timer.</span></span><span aria-hidden="true">›</span>
       </button>
       <div id="color2Field" class="field invisible">
         <label>Secondary color</label>
@@ -366,7 +366,7 @@
     </div>
     <div class="dialog-body settings-body">
       <button type="button" class="fullscreen-settings-launch" id="settingsFullscreenOpen" aria-haspopup="dialog" aria-controls="fullscreenSettingsDialog">
-        <span><strong>Full screen</strong><span class="note">Set the default layout, text, and controls.</span></span><span aria-hidden="true">›</span>
+        <span><strong>Full screen</strong><span class="note">Set default layout, controls, and screen wake.</span></span><span aria-hidden="true">›</span>
       </button>
       <div id="settingsSignedOut" class="settings-section">
         <div class="note">Sign in to sync timers and unlock experimental features.</div>
@@ -484,6 +484,9 @@
           </select>
         </div>
         <div id="timerFullscreenControls" class="fullscreen-control-grid"></div>
+        <section class="fullscreen-category-section"><h3>Keep screen awake</h3><label for="timerAwakeFullscreen">While this timer is in full screen</label>
+              <select id="timerAwakeFullscreen"><option value="">Use device default</option><option value="on">Keep screen awake</option><option value="off">Allow screen to sleep</option></select>
+              <label class="toggle"><input id="timerAwakeBoard" class="toggle-input" type="checkbox"><span>On the board while this timer is running</span></label></section>
         <div class="fullscreen-category-section"><h3>Layout</h3>
     <div class="field-row">
       <div class="field"><label for="fullscreenPlacement">Countdown placement</label><select id="fullscreenPlacement"><option value="">Use global default</option><option value="default">Default position</option><option value="overlay">Overlay</option><option value="above">Above animation</option><option value="below">Below animation</option></select></div>
@@ -504,6 +507,9 @@
           <span class="fullscreen-settings-badge">Default for all timers</span>
         </div>
         <div id="settingsFullscreenControls" class="fullscreen-control-grid"></div>
+        <section class="fullscreen-category-section"><h3>Keep screen awake</h3><label class="toggle"><input id="awakeBoard" class="toggle-input" type="checkbox"><span>On the timer board</span></label>
+                 <label class="toggle"><input id="awakeFullscreen" class="toggle-input" type="checkbox"><span>In full screen by default</span></label>
+                 <div class="note" id="awakeStatus" role="status">Saved on this device.</div></section>
         <div class="fullscreen-category-section"><h3>Layout</h3>
     <div class="field-row">
       <div class="field"><label for="globalFullscreenPlacement">Countdown placement</label><select id="globalFullscreenPlacement"><option value="default">Default position</option><option value="overlay">Overlay</option><option value="above">Above animation</option><option value="below">Below animation</option></select></div>

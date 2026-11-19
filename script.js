@@ -184,6 +184,7 @@
     scheduleFullscreenRedraw(previousNativeFullscreenCard);
     scheduleFullscreenRedraw(active);
     previousNativeFullscreenCard = active;
+    updateScreenAwake();
   }
   document.addEventListener('fullscreenchange', handleNativeFullscreenChange);
   document.addEventListener('webkitfullscreenchange', handleNativeFullscreenChange);
@@ -246,6 +247,7 @@
     // Remove body class if no fallback fullscreen cards remain
     if (!document.querySelector(".card.fullscreen-fallback")){
       document.body.classList.remove("has-fullscreen-fallback");
+      updateScreenAwake();
     }
   }
 
@@ -258,6 +260,7 @@
     card.classList.add("fullscreen-fallback");
     if (card.dataset) card.dataset.fullscreenFallback = "1";
     document.body.classList.add("has-fullscreen-fallback");
+    updateScreenAwake();
     scheduleFullscreenRedraw(card);
   }
 
@@ -3057,6 +3060,8 @@
     const draft = id ? timers.find(x=>x.id===id) : {
       id: uid("t_"), name:"", mode:"duration", style: draftStyle, color: template?.color || "#6c7bff",
       color2: template?.color2 || template?.color || "#6c7bff",
+      awakeFullscreen: template?.awakeFullscreen,
+      awakeBoard: template?.awakeBoard,
       fullscreenPlacement: template?.fullscreenPlacement,
       fullscreenText: template?.fullscreenText,
       fullscreenControls: template?.fullscreenControls ?? null,
@@ -3068,6 +3073,8 @@
       smartMethod: "manifold", smartUrl: ""
     };
 
+    $("#timerAwakeFullscreen").value = ["on","off"].includes(draft.awakeFullscreen) ? draft.awakeFullscreen : "";
+    $("#timerAwakeBoard").checked = draft.awakeBoard === true;
     $("#fullscreenPlacement").value = validFullscreenPlacement(draft.fullscreenPlacement);
     $("#fullscreenText").value = validFullscreenText(draft.fullscreenText);
     $("#f_fullscreenOverride").value = Array.isArray(draft.fullscreenControls) ? "custom" : "default";
@@ -3685,6 +3692,8 @@
     const triggers = await collectTrEntries(new Map());
     const tpl = {
       id: uid("tpl_"), name: f.name.value.trim() || "Template", style: f.style.value, color: f.color.value,
+      awakeFullscreen: $("#timerAwakeFullscreen").value,
+      awakeBoard: $("#timerAwakeBoard").checked,
       fullscreenPlacement: $("#fullscreenPlacement").value,
       fullscreenText: $("#fullscreenText").value,
       fullscreenControls: $("#f_fullscreenOverride").value === "custom" ? readFullscreenControls($("#timerFullscreenControls")) : null,
@@ -3764,6 +3773,8 @@
       })) { alert("Each same-day start time must be before the end time. Choose Previous day for an overnight timer."); return; }
     }
     const base = {
+      awakeFullscreen: $("#timerAwakeFullscreen").value,
+      awakeBoard: $("#timerAwakeBoard").checked,
       fullscreenPlacement: $("#fullscreenPlacement").value,
       fullscreenText: $("#fullscreenText").value,
       fullscreenControls: $("#f_fullscreenOverride").value === "custom" ? readFullscreenControls($("#timerFullscreenControls")) : null,
@@ -4615,6 +4626,7 @@
       }
       t._prevRem = timerLoopsEnabled(t) ? remainingMs(t) : rem;
     });
+    updateScreenAwake();
     const minTick = timers.length ? Math.min(...timers.map(t=> +t.tick || 100), 100) : 100;
     setTimeout(()=> requestAnimationFrame(tick), clamp(minTick, 16, 250));
   }
@@ -4753,6 +4765,67 @@
   }
   $("#fullscreenPlacement").addEventListener("change", previewFullscreenLayout);
   $("#fullscreenText").addEventListener("change", previewFullscreenLayout);
+  const awakeBoard = $("#awakeBoard");
+  const awakeFullscreen = $("#awakeFullscreen");
+  const awakeStatus = $("#awakeStatus");
+  awakeBoard.checked = localStorage.getItem("hyperTimer_awakeBoard") === "on";
+  awakeFullscreen.checked = localStorage.getItem("hyperTimer_awakeFullscreen") === "on";
+  let screenLock = null;
+  let requestingScreenLock = false;
+  let requestedScreenAwake = false;
+  function wantsScreenAwake() {
+    if (document.hidden) return false;
+    const card = activeNativeFullscreenElement() || fallbackFullscreenCard;
+    if (card) {
+      const timer = timers.find(item => String(item.id) === card.dataset.id);
+      return timer?.awakeFullscreen ? timer.awakeFullscreen === "on" : awakeFullscreen.checked;
+    }
+    return awakeBoard.checked || timers.some(timer => timer.awakeBoard && !timer.paused && remainingMs(timer) > 0);
+  }
+  async function updateScreenAwake() {
+    if (!navigator.wakeLock) return;
+    const wanted = wantsScreenAwake();
+    if (wanted === requestedScreenAwake) return;
+    requestedScreenAwake = wanted;
+    if (!wanted) {
+      const previous = screenLock;
+      screenLock = null;
+      try { await previous?.release(); } catch (error) { console.warn("Screen wake lock release failed", error); }
+      awakeStatus.textContent = "Saved on this device.";
+      return;
+    }
+    if (requestingScreenLock || screenLock) return;
+    requestingScreenLock = true;
+    try {
+      const lock = await navigator.wakeLock.request("screen");
+      if (!wantsScreenAwake()) {
+        await lock.release();
+        return;
+      }
+      screenLock = lock;
+      awakeStatus.textContent = "Keeping the screen awake.";
+      lock.addEventListener("release", () => {
+        if (screenLock === lock) {
+          screenLock = null;
+          awakeStatus.textContent = "The browser released the screen wake lock.";
+        }
+      });
+    } catch (error) {
+      awakeStatus.textContent = "The browser could not keep the screen awake.";
+    } finally { requestingScreenLock = false; }
+  }
+  for (const [control, key] of [[awakeBoard, "hyperTimer_awakeBoard"], [awakeFullscreen, "hyperTimer_awakeFullscreen"]]) {
+    control.disabled = !navigator.wakeLock;
+    control.addEventListener("change", () => {
+      localStorage.setItem(key, control.checked ? "on" : "off");
+      updateScreenAwake();
+    });
+  }
+  if (!navigator.wakeLock) awakeStatus.textContent = "Screen wake lock is unavailable in this browser.";
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden && !screenLock && !requestingScreenLock) requestedScreenAwake = false;
+    updateScreenAwake();
+  });
   registerServiceWorker();
   updateUIForLoginState();
   load();
