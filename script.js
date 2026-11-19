@@ -466,6 +466,22 @@
   let timers = [];
   let templates = [];
   let editId = null;
+  const boardFilter = $("#boardFilter");
+  boardFilter.value = localStorage.getItem("hyperTimer_boardFilter") || "all";
+  if (!boardFilter.value) boardFilter.value = "all";
+  boardFilter.addEventListener("change", () => {
+    localStorage.setItem("hyperTimer_boardFilter", boardFilter.value);
+    render();
+  });
+  function boardMatches(timer) {
+    switch (boardFilter.value) {
+      case "pinned": return timer.pinned === true;
+      case "running": return !timer.paused && remainingMs(timer) > 0;
+      case "paused": return !!timer.paused;
+      case "completed": return !timer.paused && remainingMs(timer) <= 0;
+      default: return true;
+    }
+  }
 
   const KEY_TIMERS = "hyperTimer_v6_timers";
   const KEY_LAST_MODIFIED = "hyperTimer_v6_lastModified";
@@ -3995,7 +4011,7 @@
     actions.className = "actions";
     const pauseBtn = (t.mode==="datetime" || t.mode==="smart") ? "" : `<button class="action-btn" data-act="pause" title="${t.paused?'Resume':'Pause'}">⏯︎</button>`;
     const fullscreenBtn = `<button class="action-btn" data-act="fullscreen" title="Fullscreen">⛶</button>`;
-    actions.innerHTML = `${pauseBtn}${fullscreenBtn}<button class="action-btn" data-act="duplicate" title="Duplicate timer" aria-label="Duplicate timer">⧉</button><button class="action-btn" data-act="prestige" title="Prestige">★</button><button class="action-btn" data-act="tplsave" title="Save template">⇪</button><button class="action-btn" data-act="edit" title="Edit">✎</button><button class="action-btn" data-act="delete" title="Delete">🗑</button>`;
+    actions.innerHTML = `${pauseBtn}${fullscreenBtn}<button class="action-btn" data-act="pin" title="${t.pinned ? "Unpin timer" : "Pin timer"}" aria-label="Pin timer" aria-pressed="${t.pinned === true}">◆</button><button class="action-btn" data-act="duplicate" title="Duplicate timer" aria-label="Duplicate timer">⧉</button><button class="action-btn" data-act="prestige" title="Prestige">★</button><button class="action-btn" data-act="tplsave" title="Save template">⇪</button><button class="action-btn" data-act="edit" title="Edit">✎</button><button class="action-btn" data-act="delete" title="Delete">🗑</button>`;
     const fullscreenControls = effectiveFullscreenControls(t);
     actions.querySelectorAll("[data-act]").forEach(button => {
       button.classList.toggle("fullscreen-visible", fullscreenControls.includes(button.dataset.act));
@@ -4010,6 +4026,7 @@
     title.appendChild(dotEl);
     const nameEl = document.createElement("span");
     nameEl.textContent = t.name || "Untitled";
+    if (t.pinned === true) card.dataset.pinned = "true";
     title.appendChild(nameEl);
     if (timerLoopsEnabled(t) && t.mode === "duration"){
       const badgeEl = document.createElement("span");
@@ -4022,6 +4039,12 @@
       badgeEl.className = "badge";
       badgeEl.textContent = `Prestige ${t.prestigeLevel}`;
       title.appendChild(badgeEl);
+    }
+    if (t.pinned === true) {
+      const badge = document.createElement("span");
+      badge.className = "pin-badge";
+      badge.textContent = "Pinned";
+      title.append(badge);
     }
     card.appendChild(title);
 
@@ -4109,12 +4132,15 @@
     actions.addEventListener("click", async ev=>{
       const act = ev.target?.dataset?.act;
       if (!act) return;
-      if (act==="pause"){
+      if (act==="pin"){
+        t.pinned = t.pinned !== true;
+        await updateAndSaveTimers();
+      } else if (act==="pause"){
         const remNow = remainingMs(t);
         t.paused = !t.paused;
         if (t.paused){ t.pausedAt = Date.now(); t.leftWhenPaused = remNow; }
         else { const delta = Date.now() - (t.pausedAt||Date.now()); if (t.mode==="duration"){ t.start += delta; } else { t.targetMs += delta; } delete t.pausedAt; }
-        render();
+        await updateAndSaveTimers();
       } else if (act==="duplicate"){
         // Copy progress, pause state and fired reminders, but never share nested state.
         const copy = JSON.parse(JSON.stringify(t));
@@ -4209,9 +4235,17 @@
     }
     
     grid.innerHTML = "";
-    timers.sort((a,b)=> remainingMs(a) - remainingMs(b));
-
-    timers.forEach(t => {
+    const visible = timers.filter(boardMatches).sort((a,b) =>
+      Number(b.pinned === true) - Number(a.pinned === true) || remainingMs(a) - remainingMs(b)
+    );
+    $("#boardCount").textContent = `${visible.length} of ${timers.length} timers`;
+    if (!visible.length) {
+      const empty = document.createElement("p");
+      empty.className = "board-empty";
+      empty.textContent = timers.length ? "No timers match this filter." : "Add a timer to get started.";
+      grid.append(empty);
+    }
+    visible.forEach(t => {
       const cards = buildTimerCards(t);
       cards.forEach(card => grid.appendChild(card));
     });
@@ -4538,8 +4572,7 @@
     const fullscreenCard = activeNativeFullscreenElement() || fallbackFullscreenCard;
     timers.forEach(t=>{
       if (t.style === "pro") ensureProSplitState(t);
-      const cards = cardsById.get(String(t.id));
-      if (!cards?.length) return;
+      const cards = cardsById.get(String(t.id)) || [];
       const template = t.units==="custom" ? resolveCustomFormatValue(t.format) : null;
       const newTxt = fmt(remainingForDisplay(t), t.units, t.ms==="on", template, t.name, t);
       const progress = visualProgress(t);
