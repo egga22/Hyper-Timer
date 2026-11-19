@@ -4696,20 +4696,8 @@
   $("#authSubmitBtn").addEventListener('click', handleAuthSubmit);
   if (authDialog) authDialog.addEventListener('close', resetAuthDialogState);
 
-  document.querySelectorAll('[data-close-dialog="backupDialog"]').forEach(button => {
-    button.addEventListener("click", () => $("#backupDialog").close());
-  });
-  let backupDraft = null;
-  const backupFile = importInput;
-  const backupSummary = $("#backupSummary");
-  const backupRestore = $("#backupRestore");
-  $("#importBtn").addEventListener("click", () => backupFile.click());
-  $("#backupDialog").addEventListener("close", () => {
-    backupDraft = null;
-    backupFile.value = "";
-    backupSummary.textContent = "";
-    backupRestore.disabled = true;
-  });
+  const importButton = $("#importBtn");
+  importButton.addEventListener("click", () => importInput.click());
   exportBtn.addEventListener("click", () => {
     const snapshot = { format: "hypertimer-backup", version: 1, savedAt: new Date().toISOString(),
       timers, templates, preferences: sanitizePreferences(userPreferences) };
@@ -4717,63 +4705,50 @@
     Object.assign(document.createElement("a"), { href: url, download: `hypertimer-backup-${snapshot.savedAt.slice(0, 10)}.json` }).click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   });
-  backupFile.addEventListener("change", async () => {
-    const file = backupFile.files[0];
-    backupDraft = null;
-    backupRestore.disabled = true;
-    backupSummary.textContent = "";
+  importInput.addEventListener("change", async () => {
+    const file = importInput.files[0];
     if (!file) return;
-    $("#backupDialog").showModal();
+    importButton.disabled = true;
+    const owner = currentUser?.id;
+    let previous;
     try {
       const data = JSON.parse(await file.text());
-      if (backupFile.files[0] !== file) return;
+      if (currentUser?.id !== owner) throw new Error("Account changed during import");
       const validList = list => Array.isArray(list) && list.every(item => item && typeof item.id === "string")
         && new Set(list.map(item => item.id)).size === list.length;
-      if (validList(data)) {
-        backupDraft = { timers: data.map(migrateTimer) };
-        backupSummary.textContent = `${data.length} timers · This replaces the current timer board.`;
-        backupRestore.disabled = false;
-        return;
-      }
-      if (data?.format !== "hypertimer-backup" || data.version !== 1
+      const legacy = validList(data);
+      if (!legacy && (data?.format !== "hypertimer-backup" || data.version !== 1
         || !validList(data.timers) || !validList(data.templates)
-        || !data.preferences || typeof data.preferences !== "object" || Array.isArray(data.preferences)) {
-        throw new Error("Invalid backup");
+        || !data.preferences || typeof data.preferences !== "object" || Array.isArray(data.preferences))) {
+        throw new Error("Choose a valid HyperTimer backup or timer export.");
       }
-      backupDraft = { timers: data.timers.map(migrateTimer), templates: data.templates.map(migrateTemplate),
-        preferences: sanitizePreferences(data.preferences) };
-      backupSummary.textContent = `${data.timers.length} timers · ${data.templates.length} templates · Settings included · This replaces your current setup.`;
-      backupRestore.disabled = false;
-    } catch (error) {
-      if (backupFile.files[0] === file) backupSummary.textContent = "Choose a valid HyperTimer backup or timer export.";
-    }
-  });
-  backupRestore.addEventListener("click", async () => {
-    if (!backupDraft) return;
-    const draft = backupDraft;
-    const previous = { templates, preferences: userPreferences, timers };
-    backupRestore.disabled = true;
-    try {
-      if (draft.templates) {
-        templates = draft.templates;
+      const next = (legacy ? data : data.timers).map(migrateTimer);
+      previous = { templates, preferences: userPreferences, timers };
+      if (!legacy) {
+        templates = data.templates.map(migrateTemplate);
         saveTemplates();
-        applyPreferencesToState(draft.preferences, { save: true });
+        applyPreferencesToState(sanitizePreferences(data.preferences), { save: true });
       }
-      await updateAndSaveTimers(draft.timers);
-      backupSummary.textContent = "Setup restored on this device.";
-      backupDraft = null;
-      if (currentUser && draft.preferences) {
+      await updateAndSaveTimers(next);
+      if (!legacy && currentUser?.id === owner && currentUser) {
         try { await pushPreferencesToCloud(); }
-        catch (error) { console.warn("Restored preferences are available locally. Cloud sync failed.", error); }
+        catch (error) { console.warn("Imported preferences were saved on this device.", error); }
       }
+      alert(legacy ? `Imported ${next.length} timer(s)` : `Imported ${next.length} timer(s), ${templates.length} template(s), and settings`);
     } catch (error) {
-      templates = previous.templates;
-      saveTemplates();
-      applyPreferencesToState(previous.preferences, { save: true });
-      timers = previous.timers;
-      render();
-      backupSummary.textContent = "Could not restore this backup. Check available browser storage.";
-      backupRestore.disabled = false;
+      if (previous && currentUser?.id === owner) {
+        timers = previous.timers;
+        templates = previous.templates;
+        try {
+          saveTemplates();
+          applyPreferencesToState(previous.preferences, { save: true });
+        } catch (restoreError) { console.warn("Could not rewrite previous settings.", restoreError); }
+        render();
+      }
+      alert(`Failed to import: ${error.message}`);
+    } finally {
+      importInput.value = "";
+      importButton.disabled = false;
     }
   });
   registerServiceWorker();
