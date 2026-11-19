@@ -188,3 +188,5 @@ a:focus-visible{outline:2px solid var(--accent); outline-offset:3px;}
 .fullscreen-controls-dialog .fullscreen-settings-footnote{display:grid; gap:4px;}
 
 #deletedList{display:grid; gap:8px}.deleted-row{display:flex; gap:14px; align-items:center; justify-content:space-between; padding:12px; background:#171925; border:1px solid rgba(255,255,255,.1); border-radius:12px}.deleted-row strong{overflow-wrap:anywhere}
+
+.board-utilities{padding:0 14px 74px}.board-utilities:has(button[hidden]){display:none}

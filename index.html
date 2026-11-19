@@ -28,6 +28,7 @@
 </header>
 
 <main class="grid" id="grid"></main>
+<div class="board-utilities"><button type="button" class="btn" id="deletedOpen" aria-haspopup="dialog" hidden>Recently deleted</button></div>
 <button class="fab" id="fab" aria-label="Add timer">＋</button>
 <div class="template-menu" id="templateMenu" role="menu" aria-label="Timer templates"></div>
 
@@ -367,9 +368,6 @@
     <div class="dialog-body settings-body">
       <button type="button" class="fullscreen-settings-launch" id="settingsFullscreenOpen" aria-haspopup="dialog" aria-controls="fullscreenSettingsDialog">
         <span><strong>Full-screen controls</strong><span class="note">Choose the default controls for your timers.</span></span><span aria-hidden="true">›</span>
-      </button>
-      <button type="button" class="fullscreen-settings-launch" id="deletedOpen" aria-haspopup="dialog">
-        <span><strong>Recently deleted</strong><span class="note">Restore timers from the past 30 days.</span></span><span aria-hidden="true">›</span>
       </button>
       <div id="settingsSignedOut" class="settings-section">
         <div class="note">Sign in to sync timers and unlock experimental features.</div>

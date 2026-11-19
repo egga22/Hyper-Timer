@@ -4193,6 +4193,7 @@
   }
 
   function render(){
+    $("#deletedOpen").hidden = !readDeletedTimers().length;
     // Remember which timer and split style was in fullscreen
     let fullscreenTimerId = null;
     let fullscreenSplitStyle = null;
@@ -4727,8 +4728,12 @@
   }
   function readDeletedTimers() {
     const cutoff = Date.now() - 30 * 86400000;
-    const saved = JSON.parse(localStorage.getItem(deletedTimerKey()) || "[]");
-    return saved.filter(entry => entry.deletedAt >= cutoff);
+    try {
+      const saved = JSON.parse(localStorage.getItem(deletedTimerKey()) || "[]");
+      return Array.isArray(saved) ? saved.filter(entry => entry?.timer && entry.deletedAt >= cutoff) : [];
+    } catch (error) {
+      return [];
+    }
   }
   function showDeletedTimers() {
     const list = $("#deletedList");
@@ -4755,6 +4760,7 @@
           localStorage.setItem(deletedTimerKey(), JSON.stringify(readDeletedTimers().filter(item =>
             item.deletedAt !== entry.deletedAt || item.timer.id !== entry.timer.id
           )));
+          $("#deletedOpen").hidden = !readDeletedTimers().length;
           showDeletedTimers();
           $("#deletedStatus").textContent = `Restored ${name.textContent}.`;
         } catch (error) {
