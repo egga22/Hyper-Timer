@@ -4711,6 +4711,77 @@
   $("#authSubmitBtn").addEventListener('click', handleAuthSubmit);
   if (authDialog) authDialog.addEventListener('close', resetAuthDialogState);
 
+  document.querySelectorAll('[data-close-dialog="backupDialog"]').forEach(button => {
+    button.addEventListener("click", () => $("#backupDialog").close());
+  });
+  let backupDraft = null;
+  const backupFile = $("#backupFile");
+  const backupSummary = $("#backupSummary");
+  const backupRestore = $("#backupRestore");
+  $("#backupOpen").addEventListener("click", () => $("#backupDialog").showModal());
+  $("#backupDialog").addEventListener("close", () => {
+    backupDraft = null;
+    backupFile.value = "";
+    backupSummary.textContent = "";
+    backupRestore.disabled = true;
+  });
+  $("#backupDownload").addEventListener("click", () => {
+    const snapshot = { format: "hypertimer-backup", version: 1, savedAt: new Date().toISOString(),
+      timers, templates, preferences: sanitizePreferences(userPreferences) };
+    const url = URL.createObjectURL(new Blob([JSON.stringify(snapshot, null, 2)], { type: "application/json" }));
+    Object.assign(document.createElement("a"), { href: url, download: `hypertimer-backup-${snapshot.savedAt.slice(0, 10)}.json` }).click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  });
+  backupFile.addEventListener("change", async () => {
+    const file = backupFile.files[0];
+    backupDraft = null;
+    backupRestore.disabled = true;
+    backupSummary.textContent = "";
+    if (!file) return;
+    try {
+      const data = JSON.parse(await file.text());
+      if (backupFile.files[0] !== file) return;
+      const validList = list => Array.isArray(list) && list.every(item => item && typeof item.id === "string")
+        && new Set(list.map(item => item.id)).size === list.length;
+      if (data?.format !== "hypertimer-backup" || data.version !== 1
+        || !validList(data.timers) || !validList(data.templates)
+        || !data.preferences || typeof data.preferences !== "object" || Array.isArray(data.preferences)) {
+        throw new Error("Invalid backup");
+      }
+      backupDraft = { timers: data.timers.map(migrateTimer), templates: data.templates.map(migrateTemplate),
+        preferences: sanitizePreferences(data.preferences) };
+      backupSummary.textContent = `${data.timers.length} timers · ${data.templates.length} templates · Settings included`;
+      backupRestore.disabled = false;
+    } catch (error) {
+      if (backupFile.files[0] === file) backupSummary.textContent = "Choose a valid HyperTimer backup. Timer-only files use Import.";
+    }
+  });
+  backupRestore.addEventListener("click", async () => {
+    if (!backupDraft || !confirm("Replace your current timers, templates, and settings with this backup?")) return;
+    const draft = backupDraft;
+    const previous = { templates, preferences: userPreferences, timers };
+    backupRestore.disabled = true;
+    try {
+      templates = draft.templates;
+      saveTemplates();
+      applyPreferencesToState(draft.preferences, { save: true });
+      await updateAndSaveTimers(draft.timers);
+      backupSummary.textContent = "Setup restored on this device.";
+      backupDraft = null;
+      if (currentUser) {
+        try { await pushPreferencesToCloud(); }
+        catch (error) { console.warn("Restored preferences are available locally. Cloud sync failed.", error); }
+      }
+    } catch (error) {
+      templates = previous.templates;
+      saveTemplates();
+      applyPreferencesToState(previous.preferences, { save: true });
+      timers = previous.timers;
+      render();
+      backupSummary.textContent = "Could not restore this backup. Check available browser storage.";
+      backupRestore.disabled = false;
+    }
+  });
   registerServiceWorker();
   updateUIForLoginState();
   load();

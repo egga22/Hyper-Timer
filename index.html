@@ -368,6 +368,9 @@
       <button type="button" class="fullscreen-settings-launch" id="settingsFullscreenOpen" aria-haspopup="dialog" aria-controls="fullscreenSettingsDialog">
         <span><strong>Full-screen controls</strong><span class="note">Choose the default controls for your timers.</span></span><span aria-hidden="true">›</span>
       </button>
+      <button type="button" class="fullscreen-settings-launch" id="backupOpen" aria-haspopup="dialog">
+        <span><strong>Backups</strong><span class="note">Save or restore timers, templates, and preferences.</span></span><span aria-hidden="true">›</span>
+      </button>
       <div id="settingsSignedOut" class="settings-section">
         <div class="note">Sign in to sync timers and unlock experimental features.</div>
         <div class="settings-actions">
@@ -500,6 +503,18 @@
         <div class="fullscreen-settings-footnote"><span>Exit Full Screen is always available.</span><span>Saved automatically · Customize any timer in its editor.</span></div>
       </section>
   <div class="fullscreen-popup-footer"><button type="button" class="btn primary" data-close-fullscreen="fullscreenSettingsDialog">Done</button></div>
+</dialog>
+
+<dialog class="fullscreen-controls-dialog" id="backupDialog" aria-labelledby="backupDialogHeading">
+  <div class="dialog-header"><h2 id="backupDialogHeading">Backups</h2><button class="btn" type="button" data-close-dialog="backupDialog" aria-label="Close">✕</button></div>
+  <div class="dialog-body">
+    <div class="settings-section"><strong>Download a full backup</strong><div class="note">Includes timers, templates, and settings for the active account or this device.</div>
+    <div class="settings-actions"><button type="button" class="btn primary" id="backupDownload">Download backup</button></div></div>
+    <div class="settings-section"><strong>Restore a backup</strong><div class="note">A full restore replaces this board, its templates, and its settings. Download a backup first to keep the current setup.</div>
+    <label for="backupFile">Backup file</label><input id="backupFile" type="file" accept=".json,application/json">
+    <div class="note" id="backupSummary" role="status"></div><div class="settings-actions"><button type="button" class="btn" id="backupRestore" disabled>Restore setup</button></div></div>
+    </div>
+  <div class="fullscreen-popup-footer"><button class="btn primary" type="button" data-close-dialog="backupDialog">Done</button></div>
 </dialog>
 
 <script src="script.js" defer></script>
