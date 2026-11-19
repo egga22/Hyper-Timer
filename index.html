@@ -37,16 +37,18 @@
       <div class="title" id="dialogTitle">New Timer</div>
       <div style="display:flex; gap:8px; align-items:center;">
         <button class="btn" id="saveTplBtn" type="button">Save as Template</button>
+        <button class="btn" id="saveTplCopy" type="button" hidden>Save a copy</button>
         <button class="btn" value="cancel" aria-label="Close dialog">✕</button>
       </div>
     </div>
     <div class="dialog-body">
+      <div class="note" id="templateEditorStatus" role="status" hidden></div>
       <div class="field">
-        <label for="f_name">Name</label>
+        <label for="f_name" id="editorNameLabel">Name</label>
         <input id="f_name" type="text" placeholder="e.g., Pizza, Exam, Birthday">
       </div>
       <div class="field-row">
-        <div class="field">
+        <div class="field template-schedule-field">
           <label for="f_mode">Mode</label>
           <select id="f_mode">
             <option value="duration">Duration</option>
