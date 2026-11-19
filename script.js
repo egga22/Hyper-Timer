@@ -3424,6 +3424,17 @@
     }
   }
   
+  function showAccountSync(account, state, message, last = null) {
+    if (account !== currentUser?.id) return;
+    const lastKey = syncStorageKey("last", account);
+    if (last) localStorage.setItem(lastKey, String(last));
+    const stamp = Number(localStorage.getItem(lastKey));
+    $("#accountSyncStatus").dataset.state = state;
+    $("#accountSyncHeadline").textContent = message;
+    $("#accountSyncDetail").textContent = stamp ? `Last successful sync · ${new Date(stamp).toLocaleString()}`
+      : "This device has yet to finish a sync.";
+  }
+
   async function syncTimers({ includePreferences = false } = {}) {
     const account = currentUser?.id;
     if (!account) return;
@@ -3495,9 +3506,12 @@
         }
       }
       verifiedTimerBoard = true;
+      showAccountSync(account, merge.conflict || next.conflict ? "pending" : "complete",
+        merge.conflict || next.conflict ? "Cloud kept · Local copy available" : "Timers are up to date", Date.now());
       renderSyncRecovery();
     }
 
+    showAccountSync(account, "checking", "Checking for changes…");
     settingsSyncBtn.disabled = true;
     settingsSyncBtn.textContent = "Syncing…";
     const task = async () => {
@@ -3509,6 +3523,11 @@
     };
     syncInFlight = task().catch(error => {
       console.error("Sync failed:", error);
+      const base = activeSyncBaseline(account);
+      const local = timerSyncIndex(timers.map(migrateTimer));
+      const pending = base && (base.size !== local.size || [...base].some(([id, value]) => local.get(id) !== value));
+      const headline = pending ? "Changes waiting to sync" : navigator.onLine ? "Sync unavailable" : "Offline";
+      showAccountSync(account, "pending", headline);
       settingsSyncBtn.textContent = "Retry Sync";
       renderSyncRecovery();
     }).finally(() => {
