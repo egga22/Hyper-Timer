@@ -4017,11 +4017,6 @@
       const loops = Math.max(0, Math.floor(Number(t.loopCount) || 0));
       badgeEl.textContent = `Loops ×${loops}`;
       title.appendChild(badgeEl);
-    } else if (t.prestigeLevel){
-      const badgeEl = document.createElement("span");
-      badgeEl.className = "badge";
-      badgeEl.textContent = `Prestige ${t.prestigeLevel}`;
-      title.appendChild(badgeEl);
     }
     card.appendChild(title);
 
