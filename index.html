@@ -123,6 +123,9 @@
       <button type="button" class="fullscreen-settings-launch" id="timerFullscreenOpen" aria-haspopup="dialog" aria-controls="timerFullscreenDialog">
         <span><strong>Full-screen controls</strong><span class="note">Choose the controls for this timer.</span></span><span aria-hidden="true">›</span>
       </button>
+      <button type="button" class="fullscreen-settings-launch" id="fullscreenLayoutOpen" aria-haspopup="dialog">
+        <span><strong>Full-screen layout</strong><span class="note">Position the countdown and choose a text size.</span></span><span aria-hidden="true">›</span>
+      </button>
       <div id="color2Field" class="field invisible">
         <label>Secondary color</label>
         <input id="f_color2" type="color" value="#ff6c7b">
@@ -500,6 +503,18 @@
         <div class="fullscreen-settings-footnote"><span>Exit Full Screen is always available.</span><span>Saved automatically · Customize any timer in its editor.</span></div>
       </section>
   <div class="fullscreen-popup-footer"><button type="button" class="btn primary" data-close-fullscreen="fullscreenSettingsDialog">Done</button></div>
+</dialog>
+
+<dialog class="fullscreen-controls-dialog" id="fullscreenLayoutDialog" aria-labelledby="fullscreenLayoutDialogHeading">
+  <div class="dialog-header"><h2 id="fullscreenLayoutDialogHeading">Full-screen layout</h2><button class="btn" type="button" data-close-dialog="fullscreenLayoutDialog" aria-label="Close">✕</button></div>
+  <div class="dialog-body">
+    <div class="field-row">
+      <div class="field"><label for="fullscreenPlacement">Countdown placement</label><select id="fullscreenPlacement"><option value="default">Default position</option><option value="overlay">Overlay</option><option value="above">Above animation</option><option value="below">Below animation</option></select></div>
+      <div class="field"><label for="fullscreenText">Text size</label><select id="fullscreenText"><option value="standard">Standard</option><option value="large">Large</option><option value="extra">Extra large</option></select></div>
+    </div>
+    <div id="layoutPreview" class="layout-preview" aria-hidden="true"><div class="layout-sample">08:42</div><div class="layout-track"><i></i></div></div>
+    </div>
+  <div class="fullscreen-popup-footer"><button class="btn primary" type="button" data-close-dialog="fullscreenLayoutDialog">Done</button></div>
 </dialog>
 
 <script src="script.js" defer></script>

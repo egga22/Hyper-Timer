@@ -3055,6 +3055,8 @@
     const draft = id ? timers.find(x=>x.id===id) : {
       id: uid("t_"), name:"", mode:"duration", style: draftStyle, color: template?.color || "#6c7bff",
       color2: template?.color2 || template?.color || "#6c7bff",
+      fullscreenPlacement: template?.fullscreenPlacement,
+      fullscreenText: template?.fullscreenText,
       fullscreenControls: template?.fullscreenControls ?? null,
       units: draftUnits,
       format: template?.format || (draftUnits === "custom" ? getDefaultCustomFormat() : "{HH}:{mm}:{ss}"),
@@ -3064,6 +3066,8 @@
       smartMethod: "manifold", smartUrl: ""
     };
 
+    $("#fullscreenPlacement").value = ["above", "below", "overlay"].includes(draft.fullscreenPlacement) ? draft.fullscreenPlacement : "default";
+    $("#fullscreenText").value = ["large", "extra"].includes(draft.fullscreenText) ? draft.fullscreenText : "standard";
     $("#f_fullscreenOverride").value = Array.isArray(draft.fullscreenControls) ? "custom" : "default";
     fillFullscreenControls($("#timerFullscreenControls"), effectiveFullscreenControls(draft), !Array.isArray(draft.fullscreenControls));
     f.name.value = draft.name||""; f.mode.value=draft.mode||"duration"; f.style.value=draft.style||"bar"; f.color.value=draft.color||"#6c7bff";
@@ -3679,6 +3683,8 @@
     const triggers = await collectTrEntries(new Map());
     const tpl = {
       id: uid("tpl_"), name: f.name.value.trim() || "Template", style: f.style.value, color: f.color.value,
+      fullscreenPlacement: $("#fullscreenPlacement").value,
+      fullscreenText: $("#fullscreenText").value,
       fullscreenControls: $("#f_fullscreenOverride").value === "custom" ? readFullscreenControls($("#timerFullscreenControls")) : null,
       color2: f.color2.value || f.color.value,
       units: f.units.value,
@@ -3756,6 +3762,8 @@
       })) { alert("Each same-day start time must be before the end time. Choose Previous day for an overnight timer."); return; }
     }
     const base = {
+      fullscreenPlacement: $("#fullscreenPlacement").value,
+      fullscreenText: $("#fullscreenText").value,
       fullscreenControls: $("#f_fullscreenOverride").value === "custom" ? readFullscreenControls($("#timerFullscreenControls")) : null,
       id: editId || uid("t_"), name: f.name.value.trim() || "Untitled", style: f.style.value, color: f.color.value,
       color2: f.color2.value || f.color.value,
@@ -3989,6 +3997,8 @@
     card.className = "card";
     card.dataset.id = t.id;
     card.dataset.displayStyle = displayStyle;
+    card.dataset.placement = t.fullscreenPlacement || "default";
+    card.dataset.fullscreenText = t.fullscreenText || "standard";
     if (splitStyle) card.dataset.proPart = splitStyle;
 
     const actions = document.createElement("div");
@@ -4711,6 +4721,19 @@
   $("#authSubmitBtn").addEventListener('click', handleAuthSubmit);
   if (authDialog) authDialog.addEventListener('close', resetAuthDialogState);
 
+  document.querySelectorAll('[data-close-dialog="fullscreenLayoutDialog"]').forEach(button => {
+    button.addEventListener("click", () => $("#fullscreenLayoutDialog").close());
+  });
+  function previewFullscreenLayout() {
+    $("#layoutPreview").dataset.placement = $("#fullscreenPlacement").value;
+    $("#layoutPreview").dataset.text = $("#fullscreenText").value;
+  }
+  $("#fullscreenLayoutOpen").addEventListener("click", () => {
+    previewFullscreenLayout();
+    $("#fullscreenLayoutDialog").showModal();
+  });
+  $("#fullscreenPlacement").addEventListener("change", previewFullscreenLayout);
+  $("#fullscreenText").addEventListener("change", previewFullscreenLayout);
   registerServiceWorker();
   updateUIForLoginState();
   load();
