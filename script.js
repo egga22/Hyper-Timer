@@ -3050,6 +3050,8 @@
   function openEditor(id=null, template=null){
     $("#dialogTitle").textContent = id ? "Edit Timer" : (template ? "New from Template" : "New Timer");
     editId = id;
+    checkedSmartDeadline = null;
+    $("#smartDeadlineResult").textContent = "Check the current deadline for this market URL.";
     const draftStyle = template?.style || getDefaultTimerStyle();
     const draftUnits = template?.units || getDefaultTimerUnits();
     const draft = id ? timers.find(x=>x.id===id) : {
@@ -3183,6 +3185,7 @@
       durFields.classList.toggle("invisible", !isDur);
       dtFields.classList.toggle("invisible", isDur || isSmart);
       if (smartFields) smartFields.classList.toggle("invisible", !isSmart);
+      $("#smartDeadlineTools").classList.toggle("invisible", !isSmart);
       if (startOverrideRow) startOverrideRow.classList.toggle("invisible", isDur);
       if (startPctRow) startPctRow.classList.toggle("invisible", isDur);
       updateLoopingSectionVisibility();
@@ -3794,7 +3797,7 @@
       if (method !== "manifold") { alert("Unsupported smart method"); return; }
       const url = f.smartUrl.value.trim();
       if (!url) { alert("Enter a market URL"); return; }
-      const ts = await getExpectedDate(url);
+      const ts = checkedSmartDeadline?.url === url ? checkedSmartDeadline.target : await getExpectedDate(url);
       if (!ts) { alert("Failed to fetch market date"); return; }
       const nowTs = now();
       let startOverrideMs = null;
@@ -4711,6 +4714,41 @@
   $("#authSubmitBtn").addEventListener('click', handleAuthSubmit);
   if (authDialog) authDialog.addEventListener('close', resetAuthDialogState);
 
+  let checkedSmartDeadline = null;
+  let smartCheckGeneration = 0;
+  const smartDeadlineRefresh = $("#smartDeadlineRefresh");
+  const smartDeadlineResult = $("#smartDeadlineResult");
+  function clearSmartDeadlineCheck() {
+    smartCheckGeneration++;
+    checkedSmartDeadline = null;
+    smartDeadlineRefresh.disabled = false;
+    smartDeadlineResult.textContent = "Check the current deadline for this market URL.";
+  }
+  f.smartUrl.addEventListener("input", clearSmartDeadlineCheck);
+  editor.addEventListener("close", clearSmartDeadlineCheck);
+  smartDeadlineRefresh.addEventListener("click", async () => {
+    const url = f.smartUrl.value.trim();
+    if (!url || !f.smartUrl.checkValidity()) {
+      smartDeadlineResult.textContent = "Enter a valid market URL first.";
+      return;
+    }
+    const generation = ++smartCheckGeneration;
+    checkedSmartDeadline = null;
+    smartDeadlineRefresh.disabled = true;
+    smartDeadlineResult.textContent = "Checking market…";
+    const target = await getExpectedDate(url);
+    if (generation !== smartCheckGeneration) return;
+    smartDeadlineRefresh.disabled = false;
+    if (!target) {
+      smartDeadlineResult.textContent = "Could not check the market deadline. Try again.";
+      return;
+    }
+    checkedSmartDeadline = { url, target };
+    const current = timers.find(timer => timer.id === editId && timer.smartUrl === url);
+    const stamp = new Date(target).toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
+    smartDeadlineResult.textContent = current?.targetMs === target ? `Deadline unchanged · ${stamp}`
+      : `Market deadline · ${stamp}. Save the timer to use it.`;
+  });
   registerServiceWorker();
   updateUIForLoginState();
   load();
