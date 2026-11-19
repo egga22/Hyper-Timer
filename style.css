@@ -187,16 +187,19 @@ a:focus-visible{outline:2px solid var(--accent); outline-offset:3px;}
 .fullscreen-popup-footer{display:flex; justify-content:flex-end; padding:0 18px 18px;}
 .fullscreen-controls-dialog .fullscreen-settings-footnote{display:grid; gap:4px;}
 
-#pairScreen{width:100vw;height:100dvh;max-width:none;max-height:none;margin:0;background:#0b0c10;border-radius:0;overflow:auto;padding:clamp(10px,3vw,32px)}
-.pair-header{display:flex;justify-content:space-between;align-items:center;gap:12px;padding-bottom:clamp(12px,3vh,26px)}
-.pair-header h2{margin:0;font-size:clamp(1rem,3vw,1.5rem)}
-#pairCards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:clamp(10px,2vw,25px)}
-#pairCards .card{display:flex;flex-direction:column;justify-content:center;align-items:center;gap:10px;min-height:min(68dvh,660px)}
-#pairCards .title{margin:0;text-align:center;font-size:clamp(.95rem,2vw,1.5rem)}
-#pairCards .big{font-size:clamp(20px,4.5vw,76px);max-width:100%;overflow-wrap:anywhere}
+#pairScreen{width:100vw;height:100dvh;max-width:none;max-height:none;margin:0;background:#0b0c10;border-radius:0;overflow:auto}
+#pairStage{height:100dvh;display:grid;grid-template-rows:auto minmax(0,1fr);gap:clamp(8px,1.6dvh,16px);padding:clamp(8px,1.4vw,18px);overflow:auto}
+#pairStage:fullscreen{background:#0b0c10}
+.pair-header{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.pair-header h2{margin:0;font-size:clamp(1rem,2vw,1.4rem)}
+#pairCards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:clamp(8px,1.4vw,18px)}
+#pairCards .card{display:grid;grid-template-rows:auto auto minmax(0,1fr);justify-items:center;align-items:center;gap:clamp(4px,1.5dvh,14px);padding:clamp(8px,1.4vw,18px);container-type:size}
+#pairCards .title{margin:0;text-align:center;font-size:clamp(.95rem,2vw,1.5rem);grid-row:1}
+#pairCards .big{margin:0;font-size:clamp(21px,12cqw,110px);max-width:100%;overflow-wrap:anywhere;grid-row:2}
 #pairCards :is(.actions,.footer-row,.subtitle,.split-note){display:none}
-#pairCards .canvaswrap{width:min(36vw,44dvh);height:min(36vw,44dvh);margin:0}
+#pairCards .canvaswrap{width:min(100cqw,calc(100cqh - clamp(70px,16cqw,155px)));height:min(100cqw,calc(100cqh - clamp(70px,16cqw,155px)));margin:0;grid-row:3}
 #pairCards .canvaswrap canvas{width:100%!important;height:100%!important}
-#pairCards .progressbar{height:20px;width:min(95%,450px)}
-@media(max-width:500px) and (orientation:portrait){#pairCards{grid-template-columns:1fr}#pairCards .card{min-height:35dvh;gap:4px}#pairCards .canvaswrap{width:min(40vw,18dvh);height:min(40vw,18dvh)}}
-#pairStage:fullscreen{background:#0b0c10;padding:clamp(10px,3vw,32px);overflow:auto}
+#pairCards .progressbar{height:clamp(24px,9cqh,86px);width:100%;grid-row:3}
+#pairCards .split-color-preview{width:100%;height:85%;grid-row:3}
+#pairCards .card[data-display-style="none"] .big{grid-row:2/4;font-size:clamp(28px,16cqw,140px)}
+@media(max-width:500px) and (orientation:portrait){#pairCards{grid-template-columns:1fr;grid-template-rows:repeat(2,minmax(0,1fr))}#pairCards .big{font-size:min(9cqw,52px)}}
