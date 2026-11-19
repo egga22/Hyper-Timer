@@ -2901,13 +2901,26 @@
   function openTemplateMenu(){
     templateMenu.innerHTML="";
     if (!templates.length) templateMenu.textContent = "No templates yet.";
-    templates.forEach(tpl=>{
+    templates.forEach((tpl, index)=>{
       const row=document.createElement("div"); row.className="template-item";
       const meta=`<div class='note'>${escapeHtml(tpl.style)} • ${escapeHtml(tpl.units)} • ${(tpl.triggers?.length||0)} trig</div>`;
       row.innerHTML=`<div style='display:flex;justify-content:space-between;gap:8px;align-items:center'><div>${escapeHtml(tpl.name)}</div><div><button class='btn' data-act='use'>Use</button> <button class='btn' data-act='edit'>Edit</button> <button class='btn' data-act='del'>Delete</button></div></div>${meta}`;
       row.querySelector("[data-act='use']").addEventListener("click", (e)=>{ e.stopPropagation(); openEditor(null, tpl); });
       row.querySelector("[data-act='edit']").addEventListener("click", (e)=>{ e.stopPropagation(); openEditor(null, tpl, true); $("#dialogTitle").textContent = "Edit Template"; });
       row.querySelector("[data-act='del']").addEventListener("click", (e)=>{ e.stopPropagation(); if(confirm("Delete template '"+tpl.name+"'?")){ templates = templates.filter(x=>x.id!==tpl.id); saveTemplates(); openTemplateMenu(); } });
+      row.dataset.templateId = tpl.id;
+      const handle = Object.assign(document.createElement("button"), { type: "button",
+        className: "btn template-drag", textContent: "⠿" });
+      handle.setAttribute("aria-label", `Reorder ${tpl.name}. Drag or use up and down arrow keys.`);
+      handle.title = "Drag to reorder";
+      handle.addEventListener("keydown", event => {
+        const offset = event.key === "ArrowUp" ? -1 : event.key === "ArrowDown" ? 1 : 0;
+        if (!offset) return;
+        event.preventDefault();
+        moveTemplate(tpl.id, index + offset);
+      });
+      handle.addEventListener("pointerdown", event => beginTemplateDrag(event, handle, row));
+      row.prepend(handle);
       templateMenu.appendChild(row);
     });
     if (!$("#templateLibrary").open) $("#templateLibrary").showModal();
@@ -4761,6 +4774,42 @@
   $("#authSubmitBtn").addEventListener('click', handleAuthSubmit);
   if (authDialog) authDialog.addEventListener('close', resetAuthDialogState);
 
+  function moveTemplate(id, to) {
+    const from = templates.findIndex(template => template.id === id);
+    if (from < 0 || to < 0 || to >= templates.length || from === to) return;
+    const next = [...templates];
+    const [item] = next.splice(from, 1);
+    next.splice(to, 0, item);
+    localStorage.setItem(TPL, JSON.stringify(next));
+    templates = next;
+    openTemplateMenu();
+    [...templateMenu.children].find(row => row.dataset.templateId === id)?.querySelector(".template-drag")?.focus();
+  }
+  function beginTemplateDrag(event, handle, row) {
+    if (event.button || !event.isPrimary) return;
+    const pointer = event.pointerId;
+    handle.setPointerCapture(pointer);
+    row.classList.add("dragging");
+    let target = null;
+    const move = event => {
+      target?.classList.remove("drop-target");
+      target = document.elementFromPoint(event.clientX, event.clientY)?.closest("[data-template-id]");
+      if (target && target !== row) target.classList.add("drop-target");
+    };
+    const finish = event => {
+      row.classList.remove("dragging");
+      target?.classList.remove("drop-target");
+      handle.removeEventListener("pointermove", move);
+      handle.removeEventListener("pointerup", finish);
+      handle.removeEventListener("pointercancel", finish);
+      if (event.type === "pointerup" && target && target !== row) {
+        moveTemplate(row.dataset.templateId, [...templateMenu.children].indexOf(target));
+      }
+    };
+    handle.addEventListener("pointermove", move);
+    handle.addEventListener("pointerup", finish);
+    handle.addEventListener("pointercancel", finish);
+  }
   registerServiceWorker();
   updateUIForLoginState();
   load();
