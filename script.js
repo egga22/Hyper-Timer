@@ -1162,6 +1162,8 @@
       defaultCustomFormat: sanitizeCustomFormat(base.defaultCustomFormat ?? base.customFormat),
       loopsEnabled,
       fullscreenControls: sanitizeFullscreenControls(base.fullscreenControls),
+      fullscreenPlacement: validFullscreenPlacement(base.fullscreenPlacement) || "default",
+      fullscreenText: validFullscreenText(base.fullscreenText) || "standard",
       percentHoverEnabled,
       saveAnimationBehavior: ["ask", "reset", "continue"].includes(base.saveAnimationBehavior) ? base.saveAnimationBehavior : "ask"
     };
@@ -3066,8 +3068,8 @@
       smartMethod: "manifold", smartUrl: ""
     };
 
-    $("#fullscreenPlacement").value = ["above", "below", "overlay"].includes(draft.fullscreenPlacement) ? draft.fullscreenPlacement : "default";
-    $("#fullscreenText").value = ["large", "extra"].includes(draft.fullscreenText) ? draft.fullscreenText : "standard";
+    $("#fullscreenPlacement").value = validFullscreenPlacement(draft.fullscreenPlacement);
+    $("#fullscreenText").value = validFullscreenText(draft.fullscreenText);
     $("#f_fullscreenOverride").value = Array.isArray(draft.fullscreenControls) ? "custom" : "default";
     fillFullscreenControls($("#timerFullscreenControls"), effectiveFullscreenControls(draft), !Array.isArray(draft.fullscreenControls));
     f.name.value = draft.name||""; f.mode.value=draft.mode||"duration"; f.style.value=draft.style||"bar"; f.color.value=draft.color||"#6c7bff";
@@ -3997,8 +3999,8 @@
     card.className = "card";
     card.dataset.id = t.id;
     card.dataset.displayStyle = displayStyle;
-    card.dataset.placement = t.fullscreenPlacement || "default";
-    card.dataset.fullscreenText = t.fullscreenText || "standard";
+    card.dataset.placement = validFullscreenPlacement(t.fullscreenPlacement) || userPreferences.fullscreenPlacement || "default";
+    card.dataset.fullscreenText = validFullscreenText(t.fullscreenText) || userPreferences.fullscreenText || "standard";
     if (splitStyle) card.dataset.proPart = splitStyle;
 
     const actions = document.createElement("div");
@@ -4634,9 +4636,15 @@
   
   $("#settingsFullscreenOpen").addEventListener("click", () => {
     refreshFullscreenControls();
+    $("#globalFullscreenPlacement").value = userPreferences.fullscreenPlacement || "default";
+    $("#globalFullscreenText").value = userPreferences.fullscreenText || "standard";
+    previewFullscreenLayout();
     $("#fullscreenSettingsDialog").showModal();
   });
-  $("#timerFullscreenOpen").addEventListener("click", () => $("#timerFullscreenDialog").showModal());
+  $("#timerFullscreenOpen").addEventListener("click", () => {
+    previewFullscreenLayout();
+    $("#timerFullscreenDialog").showModal();
+  });
   document.querySelectorAll("[data-close-fullscreen]").forEach(button => {
     button.addEventListener("click", () => document.getElementById(button.dataset.closeFullscreen).close());
   });
@@ -4721,17 +4729,28 @@
   $("#authSubmitBtn").addEventListener('click', handleAuthSubmit);
   if (authDialog) authDialog.addEventListener('close', resetAuthDialogState);
 
-  document.querySelectorAll('[data-close-dialog="fullscreenLayoutDialog"]').forEach(button => {
-    button.addEventListener("click", () => $("#fullscreenLayoutDialog").close());
-  });
-  function previewFullscreenLayout() {
-    $("#layoutPreview").dataset.placement = $("#fullscreenPlacement").value;
-    $("#layoutPreview").dataset.text = $("#fullscreenText").value;
+  function validFullscreenPlacement(value) {
+    return ["default", "above", "below", "overlay"].includes(value) ? value : "";
   }
-  $("#fullscreenLayoutOpen").addEventListener("click", () => {
-    previewFullscreenLayout();
-    $("#fullscreenLayoutDialog").showModal();
-  });
+  function validFullscreenText(value) {
+    return ["standard", "large", "extra"].includes(value) ? value : "";
+  }
+  function previewFullscreenLayout() {
+    $("#layoutPreview").dataset.placement = $("#fullscreenPlacement").value || userPreferences.fullscreenPlacement;
+    $("#layoutPreview").dataset.text = $("#fullscreenText").value || userPreferences.fullscreenText;
+    $("#globalLayoutPreview").dataset.placement = $("#globalFullscreenPlacement").value;
+    $("#globalLayoutPreview").dataset.text = $("#globalFullscreenText").value;
+  }
+  for (const control of [$("#globalFullscreenPlacement"), $("#globalFullscreenText")]) {
+    control.addEventListener("change", async () => {
+      applyPreferencesToState({ ...userPreferences, fullscreenPlacement: $("#globalFullscreenPlacement").value,
+        fullscreenText: $("#globalFullscreenText").value });
+      previewFullscreenLayout();
+      render();
+      try { await pushPreferencesToCloud(); }
+      catch (error) { console.warn("Full-screen layout was saved on this device.", error); }
+    });
+  }
   $("#fullscreenPlacement").addEventListener("change", previewFullscreenLayout);
   $("#fullscreenText").addEventListener("change", previewFullscreenLayout);
   registerServiceWorker();

@@ -203,3 +203,5 @@ a:focus-visible{outline:2px solid var(--accent); outline-offset:3px;}
 
 :is(.card:fullscreen,.card.fullscreen-fallback)[data-placement="above"] .big{order:-1}
 :is(.card:fullscreen,.card.fullscreen-fallback)[data-placement="overlay"]:not([data-display-style="none"]) .big{bottom:50%;transform:translateY(50%)}
+
+.fullscreen-category-section{display:grid;gap:10px;border-top:1px solid #343547;padding-top:14px}.fullscreen-category-section h3{margin:0}.fullscreen-category-section .layout-preview{min-height:84px}
