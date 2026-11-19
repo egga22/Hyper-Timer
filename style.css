@@ -203,3 +203,32 @@ a:focus-visible{outline:2px solid var(--accent); outline-offset:3px;}
 #pairCards .split-color-preview{width:100%;height:85%;grid-row:3}
 #pairCards .card[data-display-style="none"] .big{grid-row:2/4;font-size:clamp(28px,16cqw,140px)}
 @media(max-width:500px) and (orientation:portrait){#pairCards{grid-template-columns:1fr;grid-template-rows:repeat(2,minmax(0,1fr))}#pairCards .big{font-size:min(9cqw,52px)}}
+
+
+#pairStage{padding:clamp(5px,1vw,14px)}
+#pairCards{min-height:0}
+#pairCards .card{min-height:0}
+#pairCards .canvaswrap{width:100%;height:100%;min-height:0;align-self:stretch}
+#pairCards .card[data-display-style="bar"] .progressbar{height:clamp(28px,18cqh,160px)}
+#pairCards.pair-ring-and-bar{position:relative;grid-template-columns:1fr;grid-template-rows:minmax(0,1fr)}
+#pairCards.pair-ring-and-bar .card[data-display-style="ring"]{grid-area:1/1;width:100%;height:100%}
+#pairCards.pair-ring-and-bar .card[data-display-style="ring"] .big{font-size:clamp(30px,5.8dvh,76px)}
+#pairCards.pair-ring-and-bar .card[data-display-style="bar"]{
+  position:absolute;top:58%;left:50%;transform:translate(-50%,-50%);width:64%;height:min(42%,330px);min-height:0;
+  border:0;background:transparent!important;box-shadow:none!important;padding:0;gap:clamp(4px,1.4dvh,12px);
+  grid-template-rows:auto auto auto;align-content:center;z-index:1
+}
+#pairCards.pair-ring-and-bar .card[data-display-style="bar"] .big{font-size:clamp(24px,5dvh,68px)}
+#pairCards.pair-ring-and-bar .card[data-display-style="bar"] .progressbar{height:clamp(16px,6dvh,70px)}
+@media(max-width:600px) and (orientation:portrait){
+  #pairCards:not(.pair-ring-and-bar){grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:minmax(0,1fr)}
+  #pairCards:not(.pair-ring-and-bar) .card[data-display-style="bar"] .progressbar{
+    position:relative;width:80%;height:100%;max-height:100%;border-radius:clamp(16px,5cqw,34px)
+  }
+  #pairCards:not(.pair-ring-and-bar) .progressbar > div{
+    position:absolute;inset:auto 0 0;width:100%!important;height:var(--pair-progress,0%)
+  }
+  #pairCards .title{font-size:.88rem}
+  #pairCards .big{font-size:clamp(14px,17cqw,38px)}
+  #pairCards.pair-ring-and-bar .card[data-display-style="bar"]{width:66%}
+}

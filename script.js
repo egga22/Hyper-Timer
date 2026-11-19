@@ -4313,10 +4313,13 @@
   function ringRadius(cvs, px){ const dpr=window.devicePixelRatio||1; return (px||10)*dpr; }
   function drawRing(cvs,t){
     const ctx=cvs.getContext("2d"); const w=cvs.width,h=cvs.height; const dpr=window.devicePixelRatio||1; const size=Math.min(w,h);
-    const cx=w/2, cy=h/2; const lw=ringRadius(cvs, t.ring_thickness||10); const R=size/2-lw;
+    const cx=w/2, cy=h/2; const lw=ringRadius(cvs, t.ring_thickness||10);
+    const expanded = !!cvs.closest("#pairCards");
+    const rx = Math.max(1, (expanded ? w : size)/2-lw);
+    const ry = Math.max(1, (expanded ? h : size)/2-lw);
     const p=visualProgress(t); const start=-Math.PI/2;
-    ctx.lineWidth=lw; ctx.strokeStyle='rgba(255,255,255,.08)'; ctx.beginPath(); ctx.arc(cx,cy,R,0,Math.PI*2); ctx.stroke();
-    ctx.lineCap='round'; ctx.lineWidth=lw; ctx.strokeStyle=t.color; const end=start+p*Math.PI*2; ctx.beginPath(); ctx.arc(cx,cy,R,start,end); ctx.stroke();
+    ctx.lineWidth=lw; ctx.strokeStyle='rgba(255,255,255,.08)'; ctx.beginPath(); ctx.ellipse(cx,cy,rx,ry,0,0,Math.PI*2); ctx.stroke();
+    ctx.lineCap='round'; ctx.lineWidth=lw; ctx.strokeStyle=t.color; const end=start+p*Math.PI*2; ctx.beginPath(); ctx.ellipse(cx,cy,rx,ry,0,start,end); ctx.stroke();
   }
   
   function planLetters(totalMs, nOverride=null){
@@ -4415,8 +4418,23 @@
     const frameMs = plan.frameMs;
 
     const ctx = cvs.getContext('2d');
+    const paired = !!card?.closest("#pairCards");
+    if (paired && window.matchMedia("(max-width: 600px) and (orientation: portrait)").matches) {
+      const letters = Array.from(currentLetters(t).text);
+      const spacing = Math.min(cssH / Math.max(letters.length, 1), availW * .72);
+      const bw = Math.round(availW * dpr), bh = Math.round(cssH * dpr);
+      if (cvs.width !== bw || cvs.height !== bh) { cvs.width = bw; cvs.height = bh; }
+      ctx.clearRect(0, 0, bw, bh);
+      ctx.font = `bold ${spacing * .85 * dpr}px monospace`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillStyle = t.color || "#6c7bff";
+      letters.forEach((letter, index) => ctx.fillText(letter, bw / 2,
+        bh / 2 + (index - (letters.length - 1) / 2) * spacing * dpr));
+      return;
+    }
 
-    let fs = Math.floor(cssH * (isFS ? 1.25 : 0.36));
+    let fs = Math.floor(cssH * (paired ? .84 : isFS ? 1.25 : 0.36));
     const pad = Math.max(16, Math.floor(cssH * (isFS ? 0.02 : 0.12)));
 
     ctx.save();
@@ -4568,6 +4586,9 @@
           const { fill } = nodes;
           const width = (progress*100).toFixed(2)+"%";
           if (fill && fill.style.width !== width) fill.style.width = width;
+          if (fill && pair && card.parentElement === pairCards && fill.style.getPropertyValue("--pair-progress") !== width) {
+            fill.style.setProperty("--pair-progress", width);
+          }
         } else if (["ring","pie","multibar","letters"].includes(displayStyle)){
           const { cvs } = nodes;
           if (cvs) drawVisual(cvs, timerForVisual);
@@ -4749,6 +4770,9 @@
       empty.textContent = "This timer was removed.";
       return empty;
     });
+    const ringAndBar = cards.length === 2 && cards.some(card => card.dataset.displayStyle === "ring")
+      && cards.some(card => card.dataset.displayStyle === "bar");
+    pairCards.classList.toggle("pair-ring-and-bar", ringAndBar);
     pairCards.replaceChildren(...cards);
     cards.forEach(scheduleFullscreenRedraw);
   }
