@@ -17,6 +17,7 @@ test('fullscreen changes redraw both sizes next frame and coalesce duplicate eve
   const start = source.indexOf('  let fallbackFullscreenCard = null;');
   const end = source.indexOf('\n  async function tryEnterNativeFullscreen', start);
   vm.runInContext(source.slice(start, end), context);
+  context.returnToBoard = () => {};
   listeners.fullscreenchange();
   listeners.webkitfullscreenchange();
   assert.equal(frames.length, 1);
@@ -28,7 +29,8 @@ test('fullscreen changes redraw both sizes next frame and coalesce duplicate eve
   assert.equal(timer.style, 'pro');
   document.fullscreenElement = null;
   listeners.fullscreenchange();
-  assert.equal(frames.length, 1);
+  assert.equal(frames.length, 2);
+  frames.shift()();
   frames.shift()();
   assert.equal(draws.length, 2, 'exited card redraws without waiting for a timer tick');
   context.scheduleFullscreenRedraw(card);
