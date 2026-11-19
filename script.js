@@ -466,22 +466,7 @@
   let timers = [];
   let templates = [];
   let editId = null;
-  const boardFilter = $("#boardFilter");
-  boardFilter.value = localStorage.getItem("hyperTimer_boardFilter") || "all";
-  if (!boardFilter.value) boardFilter.value = "all";
-  boardFilter.addEventListener("change", () => {
-    localStorage.setItem("hyperTimer_boardFilter", boardFilter.value);
-    render();
-  });
-  function boardMatches(timer) {
-    switch (boardFilter.value) {
-      case "pinned": return timer.pinned === true;
-      case "running": return !timer.paused && remainingMs(timer) > 0;
-      case "paused": return !!timer.paused;
-      case "completed": return !timer.paused && remainingMs(timer) <= 0;
-      default: return true;
-    }
-  }
+
 
   const KEY_TIMERS = "hyperTimer_v6_timers";
   const KEY_LAST_MODIFIED = "hyperTimer_v6_lastModified";
@@ -4140,7 +4125,7 @@
         t.paused = !t.paused;
         if (t.paused){ t.pausedAt = Date.now(); t.leftWhenPaused = remNow; }
         else { const delta = Date.now() - (t.pausedAt||Date.now()); if (t.mode==="duration"){ t.start += delta; } else { t.targetMs += delta; } delete t.pausedAt; }
-        await updateAndSaveTimers();
+        render();
       } else if (act==="duplicate"){
         // Copy progress, pause state and fired reminders, but never share nested state.
         const copy = JSON.parse(JSON.stringify(t));
@@ -4235,16 +4220,9 @@
     }
     
     grid.innerHTML = "";
-    const visible = timers.filter(boardMatches).sort((a,b) =>
+    const visible = [...timers].sort((a,b) =>
       Number(b.pinned === true) - Number(a.pinned === true) || remainingMs(a) - remainingMs(b)
     );
-    $("#boardCount").textContent = `${visible.length} of ${timers.length} timers`;
-    if (!visible.length) {
-      const empty = document.createElement("p");
-      empty.className = "board-empty";
-      empty.textContent = timers.length ? "No timers match this filter." : "Add a timer to get started.";
-      grid.append(empty);
-    }
     visible.forEach(t => {
       const cards = buildTimerCards(t);
       cards.forEach(card => grid.appendChild(card));
@@ -4572,7 +4550,8 @@
     const fullscreenCard = activeNativeFullscreenElement() || fallbackFullscreenCard;
     timers.forEach(t=>{
       if (t.style === "pro") ensureProSplitState(t);
-      const cards = cardsById.get(String(t.id)) || [];
+      const cards = cardsById.get(String(t.id));
+      if (!cards?.length) return;
       const template = t.units==="custom" ? resolveCustomFormatValue(t.format) : null;
       const newTxt = fmt(remainingForDisplay(t), t.units, t.ms==="on", template, t.name, t);
       const progress = visualProgress(t);
