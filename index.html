@@ -368,6 +368,9 @@
       <button type="button" class="fullscreen-settings-launch" id="settingsFullscreenOpen" aria-haspopup="dialog" aria-controls="fullscreenSettingsDialog">
         <span><strong>Full-screen controls</strong><span class="note">Choose the default controls for your timers.</span></span><span aria-hidden="true">›</span>
       </button>
+      <button type="button" class="fullscreen-settings-launch" id="deletedOpen" aria-haspopup="dialog">
+        <span><strong>Recently deleted</strong><span class="note">Restore timers from the past 30 days.</span></span><span aria-hidden="true">›</span>
+      </button>
       <div id="settingsSignedOut" class="settings-section">
         <div class="note">Sign in to sync timers and unlock experimental features.</div>
         <div class="settings-actions">
@@ -500,6 +503,12 @@
         <div class="fullscreen-settings-footnote"><span>Exit Full Screen is always available.</span><span>Saved automatically · Customize any timer in its editor.</span></div>
       </section>
   <div class="fullscreen-popup-footer"><button type="button" class="btn primary" data-close-fullscreen="fullscreenSettingsDialog">Done</button></div>
+</dialog>
+
+<dialog class="fullscreen-controls-dialog" id="deletedDialog" aria-labelledby="deletedDialogHeading">
+  <div class="dialog-header"><h2 id="deletedDialogHeading">Recently deleted</h2><button class="btn" type="button" data-close-dialog="deletedDialog" aria-label="Close">✕</button></div>
+  <div class="dialog-body"><div id="deletedList"></div><p class="note" id="deletedStatus" role="status"></p></div>
+  <div class="fullscreen-popup-footer"><button class="btn primary" type="button" data-close-dialog="deletedDialog">Done</button></div>
 </dialog>
 
 <script src="script.js" defer></script>
