@@ -2903,7 +2903,7 @@
     if (!templates.length) templateMenu.textContent = "No templates yet.";
     templates.forEach(tpl=>{
       const row=document.createElement("div"); row.className="template-item";
-      const meta=`<div class='note'>${tpl.style} • ${tpl.units} • ${(tpl.triggers?.length||0)} trig</div>`;
+      const meta=`<div class='note'>${escapeHtml(tpl.style)} • ${escapeHtml(tpl.units)} • ${(tpl.triggers?.length||0)} trig</div>`;
       row.innerHTML=`<div style='display:flex;justify-content:space-between;gap:8px;align-items:center'><div>${escapeHtml(tpl.name)}</div><div><button class='btn' data-act='use'>Use</button> <button class='btn' data-act='edit'>Edit</button> <button class='btn' data-act='del'>Delete</button></div></div>${meta}`;
       row.querySelector("[data-act='use']").addEventListener("click", (e)=>{ e.stopPropagation(); openEditor(null, tpl); });
       row.querySelector("[data-act='edit']").addEventListener("click", (e)=>{ e.stopPropagation(); openEditor(null, tpl, true); $("#dialogTitle").textContent = "Edit Template"; });
@@ -3771,14 +3771,14 @@
   let timerSaveInProgress = false;
   $("#saveBtn").addEventListener("click", async (e)=>{
     e.preventDefault();
-    if (timerSaveInProgress) return;
-    timerSaveInProgress = true;
+    if (timerSaveInProgress || templateSaving) return;
     if (editingTemplate) {
       e.stopPropagation();
       $("#saveBtn").disabled = true;
       try { await runTemplateSave(true); } finally { $("#saveBtn").disabled = false; }
       return;
     }
+    timerSaveInProgress = true;
     $("#saveBtn").disabled = true;
     try {
     const existing = editId ? timers.find(x=>x.id===editId) : null;
