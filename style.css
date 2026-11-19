@@ -187,4 +187,4 @@ a:focus-visible{outline:2px solid var(--accent); outline-offset:3px;}
 .fullscreen-popup-footer{display:flex; justify-content:flex-end; padding:0 18px 18px;}
 .fullscreen-controls-dialog .fullscreen-settings-footnote{display:grid; gap:4px;}
 
-#syncRecovery[hidden]{display:none}
+#syncRecoveryOpen[hidden]{display:none}

@@ -141,7 +141,7 @@
 
   function renderSyncRecovery() {
     const history = currentUser ? JSON.parse(localStorage.getItem(syncStorageKey("recovery", currentUser.id)) || "[]") : [];
-    $("#syncRecovery").hidden = history.length === 0;
+    $("#syncRecoveryOpen").hidden = history.length === 0;
     $("#syncRecoveryVersion").replaceChildren(...history.map((item, index) => new Option(
       `${new Date(item.savedAt).toLocaleString()} · ${item.timers.length} timers`, index
     )));
@@ -4612,6 +4612,10 @@
   $("#authSubmitBtn").addEventListener('click', handleAuthSubmit);
   if (authDialog) authDialog.addEventListener('close', resetAuthDialogState);
 
+  document.querySelectorAll('[data-close-dialog="syncRecoveryDialog"]').forEach(button => {
+    button.addEventListener("click", () => $("#syncRecoveryDialog").close());
+  });
+  $("#syncRecoveryOpen").addEventListener("click", () => $("#syncRecoveryDialog").showModal());
   registerServiceWorker();
   updateUIForLoginState();
   load();

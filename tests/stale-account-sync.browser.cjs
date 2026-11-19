@@ -63,10 +63,12 @@ const timer = (id, name, fields) => ({
     assert.equal(await page.getByText('Expired only on phone').count(), 0);
 
     await page.locator('#settingsBtn').click();
+    await page.locator('#syncRecoveryOpen').click();
     const download = page.waitForEvent('download');
     await page.locator('#syncRecoveryBtn').click();
     const recovery = JSON.parse(fs.readFileSync(await (await download).path()));
     assert.ok(recovery.some(item => item.id === 'expired'), 'legacy cache is recoverable');
+    await page.keyboard.press('Escape');
     await page.keyboard.press('Escape');
 
     remote = { ...remote, timers: [...remote.timers, timer('later', 'Added from laptop while phone sleeps')] };
