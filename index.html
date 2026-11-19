@@ -35,8 +35,9 @@
   <form method="dialog" novalidate>
     <div class="dialog-header">
       <div class="title" id="dialogTitle">New Timer</div>
-      <div style="display:flex; gap:8px; align-items:center;">
+      <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center;">
         <button class="btn" id="saveTplBtn" type="button">Save as Template</button>
+        <button class="btn" id="timerApplyOpen" type="button" aria-haspopup="dialog" hidden>Apply template</button>
         <button class="btn" value="cancel" aria-label="Close dialog">✕</button>
       </div>
     </div>
@@ -122,9 +123,6 @@
       </div>
       <button type="button" class="fullscreen-settings-launch" id="timerFullscreenOpen" aria-haspopup="dialog" aria-controls="timerFullscreenDialog">
         <span><strong>Full-screen controls</strong><span class="note">Choose the controls for this timer.</span></span><span aria-hidden="true">›</span>
-      </button>
-      <button type="button" class="fullscreen-settings-launch" id="timerApplyOpen" aria-haspopup="dialog" hidden>
-        <span><strong>Apply template</strong><span class="note">Load selected settings into this timer.</span></span><span aria-hidden="true">›</span>
       </button>
       <div class="note" id="timerTemplateStaged" role="status" hidden></div>
       <div id="color2Field" class="field invisible">
