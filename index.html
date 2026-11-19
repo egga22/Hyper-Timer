@@ -22,6 +22,7 @@
       <button class="btn" id="exportBtn">Export</button>
       <label class="btn" for="importInput">Import <input id="importInput" type="file" accept="application/json" style="display:none;"></label>
       <button class="btn" id="tplBtn" aria-haspopup="menu" aria-expanded="false">Templates ▾</button>
+      <button class="btn" id="pairOpen" type="button" aria-haspopup="dialog">Compare</button>
       <button class="btn primary" id="addBtn">New</button>
     </div>
   </div>
@@ -502,6 +503,22 @@
   <div class="fullscreen-popup-footer"><button type="button" class="btn primary" data-close-fullscreen="fullscreenSettingsDialog">Done</button></div>
 </dialog>
 
+<dialog class="fullscreen-controls-dialog" id="pairPicker" aria-labelledby="pairPickerHeading">
+  <div class="dialog-header"><h2 id="pairPickerHeading">Compare timers</h2><button class="btn" type="button" data-close-dialog="pairPicker" aria-label="Close">✕</button></div>
+  <div class="dialog-body">
+      <div class="field-row"><div class="field"><label for="pairFirst">First timer</label><select id="pairFirst"></select></div>
+      <div class="field"><label for="pairSecond">Second timer</label><select id="pairSecond"></select></div></div>
+      <p class="note">Both timers continue running and can fire their own alerts.</p>
+    </div>
+  <div class="fullscreen-popup-footer"><button class="btn primary" id="pairStart" type="button">Open full screen</button></div>
+</dialog>
+
+<dialog id="pairScreen" aria-labelledby="pairScreenTitle">
+  <div id="pairStage">
+    <div class="pair-header"><h2 id="pairScreenTitle">Compare timers</h2><button id="pairExit" class="btn" type="button">Exit full screen</button></div>
+    <div id="pairCards"></div>
+  </div>
+</dialog>
 <script src="script.js" defer></script>
 </body>
 </html>

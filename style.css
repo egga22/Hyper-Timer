@@ -186,3 +186,17 @@ a:focus-visible{outline:2px solid var(--accent); outline-offset:3px;}
 .fullscreen-popup-content{border:0; border-radius:0; background:transparent;}
 .fullscreen-popup-footer{display:flex; justify-content:flex-end; padding:0 18px 18px;}
 .fullscreen-controls-dialog .fullscreen-settings-footnote{display:grid; gap:4px;}
+
+#pairScreen{width:100vw;height:100dvh;max-width:none;max-height:none;margin:0;background:#0b0c10;border-radius:0;overflow:auto;padding:clamp(10px,3vw,32px)}
+.pair-header{display:flex;justify-content:space-between;align-items:center;gap:12px;padding-bottom:clamp(12px,3vh,26px)}
+.pair-header h2{margin:0;font-size:clamp(1rem,3vw,1.5rem)}
+#pairCards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:clamp(10px,2vw,25px)}
+#pairCards .card{display:flex;flex-direction:column;justify-content:center;align-items:center;gap:10px;min-height:min(68dvh,660px)}
+#pairCards .title{margin:0;text-align:center;font-size:clamp(.95rem,2vw,1.5rem)}
+#pairCards .big{font-size:clamp(20px,4.5vw,76px);max-width:100%;overflow-wrap:anywhere}
+#pairCards :is(.actions,.footer-row,.subtitle,.split-note){display:none}
+#pairCards .canvaswrap{width:min(36vw,44dvh);height:min(36vw,44dvh);margin:0}
+#pairCards .canvaswrap canvas{width:100%!important;height:100%!important}
+#pairCards .progressbar{height:20px;width:min(95%,450px)}
+@media(max-width:500px) and (orientation:portrait){#pairCards{grid-template-columns:1fr}#pairCards .card{min-height:35dvh;gap:4px}#pairCards .canvaswrap{width:min(40vw,18dvh);height:min(40vw,18dvh)}}
+#pairStage:fullscreen{background:#0b0c10;padding:clamp(10px,3vw,32px);overflow:auto}

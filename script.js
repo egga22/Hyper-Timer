@@ -4208,6 +4208,8 @@
       // as fallback fullscreen since we can't programmatically restore native.
     }
     
+    $("#pairOpen").hidden = !userCanUseProMode();
+    $("#pairOpen").disabled = timers.length < 2;
     grid.innerHTML = "";
     timers.sort((a,b)=> remainingMs(a) - remainingMs(b));
 
@@ -4224,6 +4226,8 @@
       return !card.dataset.proPart || card.dataset.proPart === '';
     }
     
+    if ($("#pairScreen").open) renderPair();
+
     // Restore fullscreen if there was one
     if (fullscreenTimerId) {
       // Safely find the card by iterating through cards instead of using template literals in selectors
@@ -4535,6 +4539,7 @@
 
   function tick(){
     const cardsById = groupTimerCards(grid);
+    const pair = typeof pairScreen !== "undefined" && pairScreen.open ? groupTimerCards(pairCards) : null;
     const fullscreenCard = activeNativeFullscreenElement() || fallbackFullscreenCard;
     timers.forEach(t=>{
       if (t.style === "pro") ensureProSplitState(t);
@@ -4544,9 +4549,9 @@
       const newTxt = fmt(remainingForDisplay(t), t.units, t.ms==="on", template, t.name, t);
       const progress = visualProgress(t);
 
-      cards.forEach(card => {
+      [...cards, ...(pair?.get(String(t.id)) || [])].forEach(card => {
         // Keep reminder/completion processing below active for every timer.
-        if (fullscreenCard && card !== fullscreenCard) return;
+        if (fullscreenCard && card !== fullscreenCard && !(pair && card.parentElement === pairCards)) return;
         const nodes = getCardUpdateNodes(card);
         const { txt } = nodes;
         if (txt && txt.textContent !== newTxt){
@@ -4711,6 +4716,72 @@
   $("#authSubmitBtn").addEventListener('click', handleAuthSubmit);
   if (authDialog) authDialog.addEventListener('close', resetAuthDialogState);
 
+  document.querySelectorAll('[data-close-dialog="pairPicker"]').forEach(button => {
+    button.addEventListener("click", () => $("#pairPicker").close());
+  });
+  const pairScreen = $("#pairScreen");
+  const pairCards = $("#pairCards");
+  const pairStage = $("#pairStage");
+  let pairNative = false;
+  const pairFirst = $("#pairFirst");
+  const pairSecond = $("#pairSecond");
+  const pairStart = $("#pairStart");
+  let displayedPair = [];
+  $("#pairOpen").addEventListener("click", () => {
+    if (!userCanUseProMode()) return;
+    [pairFirst, pairSecond].forEach((select, index) => {
+      select.replaceChildren(...timers.map(timer => new Option(timer.name || "Untitled", timer.id)));
+      select.selectedIndex = index;
+    });
+    updatePairStart();
+    $("#pairPicker").showModal();
+  });
+  function updatePairStart() {
+    pairStart.disabled = !pairFirst.value || !pairSecond.value || pairFirst.value === pairSecond.value;
+  }
+  pairFirst.addEventListener("change", updatePairStart);
+  pairSecond.addEventListener("change", updatePairStart);
+  function renderPair() {
+    const cards = displayedPair.map(id => {
+      const timer = timers.find(item => String(item.id) === id);
+      if (timer) return buildTimerCards(timer)[0];
+      const empty = document.createElement("p");
+      empty.textContent = "This timer was removed.";
+      return empty;
+    });
+    pairCards.replaceChildren(...cards);
+    cards.forEach(scheduleFullscreenRedraw);
+  }
+  pairStart.addEventListener("click", async () => {
+    displayedPair = [pairFirst.value, pairSecond.value];
+    $("#pairPicker").close();
+    renderPair();
+    pairScreen.showModal();
+    if (pairStage.requestFullscreen) {
+      try {
+        await pairStage.requestFullscreen();
+        pairNative = document.fullscreenElement === pairStage;
+      } catch (error) {
+        // The full-viewport dialog also works when native fullscreen is unavailable.
+      }
+    }
+    renderPair();
+  });
+  document.addEventListener("fullscreenchange", () => {
+    if (pairNative && document.fullscreenElement !== pairStage) {
+      pairNative = false;
+      if (pairScreen.open) pairScreen.close();
+    }
+  });
+  $("#pairExit").addEventListener("click", async () => {
+    if (document.fullscreenElement === pairStage) await exitNativeFullscreenIfActive();
+    if (pairScreen.open) pairScreen.close();
+  });
+  pairScreen.addEventListener("close", () => {
+    if (document.fullscreenElement === pairStage) exitNativeFullscreenIfActive();
+    pairCards.replaceChildren();
+    $("#pairOpen").focus();
+  });
   registerServiceWorker();
   updateUIForLoginState();
   load();
