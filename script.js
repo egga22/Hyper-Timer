@@ -2900,28 +2900,17 @@
 
   function openTemplateMenu(){
     templateMenu.innerHTML="";
-    const add=document.createElement("div"); add.className="template-item"; add.innerHTML="<strong>＋ New Template</strong>";
-    add.addEventListener("click", ()=>{ templateMenu.classList.remove("open"); if (tplBtn) tplBtn.setAttribute("aria-expanded", "false"); openEditor(null, {style:'bar', color:'#6c7bff', color2:'#6c7bff', units:'auto'}); });
-    templateMenu.appendChild(add);
+    if (!templates.length) templateMenu.textContent = "No templates yet.";
     templates.forEach(tpl=>{
       const row=document.createElement("div"); row.className="template-item";
       const meta=`<div class='note'>${tpl.style} • ${tpl.units} • ${(tpl.triggers?.length||0)} trig</div>`;
-      row.innerHTML=`<div style='display:flex;justify-content:space-between;gap:8px;align-items:center'><div>${escapeHtml(tpl.name)}</div><div><button class='btn' data-act='use'>Use</button> <button class='btn' data-act='rename'>Rename</button> <button class='btn' data-act='edit'>Edit</button> <button class='btn' data-act='del'>Delete</button></div></div>${meta}`;
-      row.querySelector("[data-act='use']").addEventListener("click", (e)=>{ e.stopPropagation(); templateMenu.classList.remove("open"); if (tplBtn) tplBtn.setAttribute("aria-expanded", "false"); openEditor(null, tpl); });
-      row.querySelector("[data-act='edit']").addEventListener("click", (e)=>{ e.stopPropagation(); templateMenu.classList.remove("open"); if (tplBtn) tplBtn.setAttribute("aria-expanded", "false"); openEditor(null, tpl, true); $("#dialogTitle").textContent = "Edit Template"; });
-      row.querySelector("[data-act='rename']").addEventListener("click", (e)=>{
-        e.stopPropagation();
-        const name = prompt("Template name", tpl.name);
-        if (name === null) return;
-        if (!name.trim()) { alert("Enter a template name."); return; }
-        tpl.name = name.trim();
-        saveTemplates();
-        openTemplateMenu();
-      });
+      row.innerHTML=`<div style='display:flex;justify-content:space-between;gap:8px;align-items:center'><div>${escapeHtml(tpl.name)}</div><div><button class='btn' data-act='use'>Use</button> <button class='btn' data-act='edit'>Edit</button> <button class='btn' data-act='del'>Delete</button></div></div>${meta}`;
+      row.querySelector("[data-act='use']").addEventListener("click", (e)=>{ e.stopPropagation(); openEditor(null, tpl); });
+      row.querySelector("[data-act='edit']").addEventListener("click", (e)=>{ e.stopPropagation(); openEditor(null, tpl, true); $("#dialogTitle").textContent = "Edit Template"; });
       row.querySelector("[data-act='del']").addEventListener("click", (e)=>{ e.stopPropagation(); if(confirm("Delete template '"+tpl.name+"'?")){ templates = templates.filter(x=>x.id!==tpl.id); saveTemplates(); openTemplateMenu(); } });
       templateMenu.appendChild(row);
     });
-    templateMenu.classList.add("open");
+    if (!$("#templateLibrary").open) $("#templateLibrary").showModal();
     if (tplBtn) tplBtn.setAttribute("aria-expanded", "true");
   }
 
@@ -3703,7 +3692,7 @@
       });
     }
     const tpl = {
-      id: update ? editorSourceTemplate.id : uid("tpl_"), name: f.name.value.trim() || "Template", style: f.style.value, color: f.color.value,
+      id: update && editorSourceTemplate.id ? editorSourceTemplate.id : uid("tpl_"), name: f.name.value.trim() || "Template", style: f.style.value, color: f.color.value,
       fullscreenControls: $("#f_fullscreenOverride").value === "custom" ? readFullscreenControls($("#timerFullscreenControls")) : null,
       color2: f.color2.value || f.color.value,
       units: f.units.value,
@@ -3724,9 +3713,9 @@
       tpl.splitStyles = structuredClone(source?.splitStyles || PRO_SPLIT_STYLES);
       tpl.splitSettings = source?.splitSettings ? structuredClone(source.splitSettings) : null;
     }
-    if (update) templates = templates.map(item => item.id === tpl.id ? { ...item, ...tpl } : item);
+    if (update && editorSourceTemplate.id) templates = templates.map(item => item.id === tpl.id ? { ...item, ...tpl } : item);
     else {
-      if (editingTemplate && tpl.name === editorSourceTemplate.name) tpl.name += " copy";
+      if (!update && editingTemplate && tpl.name === editorSourceTemplate.name) tpl.name += " copy";
       else if (!f.name.value.trim()) tpl.name = pickTemplateName(tpl);
       templates.push(tpl);
     }
@@ -4756,7 +4745,14 @@
     if (settingsBtn) settingsBtn.setAttribute('aria-expanded', 'false');
   });
   tplBtn.addEventListener("click", ()=> openTemplateMenu());
-  document.addEventListener("click", (e)=>{ if(!templateMenu.contains(e.target) && e.target!==tplBtn){ templateMenu.classList.remove("open"); if (tplBtn) tplBtn.setAttribute("aria-expanded", "false"); } });
+  $("#templateClose").addEventListener("click", () => $("#templateLibrary").close());
+  $("#templateLibrary").addEventListener("close", () => tplBtn.setAttribute("aria-expanded", "false"));
+  $("#templateNew").addEventListener("click", () => {
+    openEditor(null, { style: "bar", color: "#6c7bff", units: "auto" }, true);
+    $("#dialogTitle").textContent = "New Template";
+    $("#saveBtn").textContent = "Save template";
+    $("#saveTplCopy").hidden = true;
+  });
   $("#authModeSwitch").addEventListener('click', (e) => {
     e.preventDefault();
     const isSignUp = $("#authTitle").textContent === "Log In";

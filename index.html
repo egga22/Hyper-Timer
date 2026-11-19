@@ -21,7 +21,7 @@
       </button>
       <button class="btn" id="exportBtn">Export</button>
       <label class="btn" for="importInput">Import <input id="importInput" type="file" accept="application/json" style="display:none;"></label>
-      <button class="btn" id="tplBtn" aria-haspopup="menu" aria-expanded="false">Templates ▾</button>
+      <button class="btn" id="tplBtn" aria-haspopup="dialog" aria-controls="templateLibrary" aria-expanded="false">Templates ▾</button>
       <button class="btn primary" id="addBtn">New</button>
     </div>
   </div>
@@ -29,7 +29,10 @@
 
 <main class="grid" id="grid"></main>
 <button class="fab" id="fab" aria-label="Add timer">＋</button>
-<div class="template-menu" id="templateMenu" role="menu" aria-label="Timer templates"></div>
+<dialog class="template-library" id="templateLibrary" aria-labelledby="templateHeading">
+  <header class="template-library-header"><h2 id="templateHeading">Templates</h2><div class="controls"><button type="button" class="btn primary" id="templateNew">New template</button><button type="button" class="btn" id="templateClose">Close</button></div></header>
+  <div id="templateMenu" class="template-library-grid"></div>
+</dialog>
 
 <dialog id="editor" aria-labelledby="dialogTitle">
   <form method="dialog" novalidate>
