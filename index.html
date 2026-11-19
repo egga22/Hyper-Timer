@@ -502,6 +502,21 @@
   <div class="fullscreen-popup-footer"><button type="button" class="btn primary" data-close-fullscreen="fullscreenSettingsDialog">Done</button></div>
 </dialog>
 
+<dialog class="fullscreen-controls-dialog" id="applyTemplateDialog" aria-labelledby="applyTemplateDialogHeading">
+  <div class="dialog-header"><h2 id="applyTemplateDialogHeading">Apply template</h2><button class="btn" type="button" data-close-dialog="applyTemplateDialog" aria-label="Close">✕</button></div>
+  <div class="dialog-body">
+    <div class="note" id="templateApplyName"></div>
+    <fieldset class="template-apply-fields"><legend>Settings to replace</legend>
+      <label><input type="checkbox" value="appearance" checked> Appearance and time display</label>
+      <label><input type="checkbox" value="alerts"> Triggers and completion alerts</label>
+      <label><input type="checkbox" value="fullscreen"> Full-screen controls</label>
+    </fieldset>
+    <fieldset class="template-apply-fields" id="templateTargets"><legend>Timers</legend></fieldset>
+    <div class="note" id="templateApplySummary" role="status"></div>
+    </div>
+  <div class="fullscreen-popup-footer"><button class="btn primary" type="button" id="templateApplySave" disabled>Apply selected settings</button></div>
+</dialog>
+
 <script src="script.js" defer></script>
 </body>
 </html>

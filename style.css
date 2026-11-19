@@ -186,3 +186,7 @@ a:focus-visible{outline:2px solid var(--accent); outline-offset:3px;}
 .fullscreen-popup-content{border:0; border-radius:0; background:transparent;}
 .fullscreen-popup-footer{display:flex; justify-content:flex-end; padding:0 18px 18px;}
 .fullscreen-controls-dialog .fullscreen-settings-footnote{display:grid; gap:4px;}
+
+.template-apply-fields{border:1px solid #37394d;border-radius:12px;display:grid;gap:10px;padding:12px 15px;margin:0}
+.template-apply-fields legend{padding:0 6px;font-weight:650}.template-apply-fields label{display:flex;align-items:center;gap:8px;color:var(--text)}
+.template-apply-fields input{accent-color:var(--accent)}#templateTargets{max-height:30dvh;overflow:auto}

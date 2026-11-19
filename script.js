@@ -2904,8 +2904,12 @@
     templates.forEach(tpl=>{
       const row=document.createElement("div"); row.className="template-item";
       const meta=`<div class='note'>${tpl.style} • ${tpl.units} • ${(tpl.triggers?.length||0)} trig</div>`;
-      row.innerHTML=`<div style='display:flex;justify-content:space-between;gap:8px;align-items:center'><div>${escapeHtml(tpl.name)}</div><div><button class='btn' data-act='use'>Use</button> <button class='btn' data-act='rename'>Rename</button> <button class='btn' data-act='edit'>Edit</button> <button class='btn' data-act='del'>Delete</button></div></div>${meta}`;
+      row.innerHTML=`<div style='display:flex;justify-content:space-between;gap:8px;align-items:center'><div>${escapeHtml(tpl.name)}</div><div><button class='btn' data-act='use'>Use</button> <button class='btn' data-act='apply'>Apply to timers</button> <button class='btn' data-act='rename'>Rename</button> <button class='btn' data-act='edit'>Edit</button> <button class='btn' data-act='del'>Delete</button></div></div>${meta}`;
       row.querySelector("[data-act='use']").addEventListener("click", (e)=>{ e.stopPropagation(); templateMenu.classList.remove("open"); if (tplBtn) tplBtn.setAttribute("aria-expanded", "false"); openEditor(null, tpl); });
+      row.querySelector("[data-act='apply']").addEventListener("click", event => {
+        event.stopPropagation();
+        openTemplateApply(tpl);
+      });
       row.querySelector("[data-act='edit']").addEventListener("click", (e)=>{ e.stopPropagation(); templateMenu.classList.remove("open"); if (tplBtn) tplBtn.setAttribute("aria-expanded", "false"); openEditor(null, tpl); $("#dialogTitle").textContent = "Edit Template"; });
       row.querySelector("[data-act='rename']").addEventListener("click", (e)=>{
         e.stopPropagation();
@@ -4711,6 +4715,84 @@
   $("#authSubmitBtn").addEventListener('click', handleAuthSubmit);
   if (authDialog) authDialog.addEventListener('close', resetAuthDialogState);
 
+  document.querySelectorAll('[data-close-dialog="applyTemplateDialog"]').forEach(button => {
+    button.addEventListener("click", () => $("#applyTemplateDialog").close());
+  });
+  const templateGroups = {
+    appearance: ["style", "color", "color2", "units", "format", "ring_thickness", "ease", "tick", "ms",
+      "dotsCount", "mb_bars", "mb_ticks", "letters_n", "splitStyles", "splitSettings"],
+    alerts: ["triggers", "doneSoundDataUrl", "doneTts"],
+    fullscreen: ["fullscreenControls"]
+  };
+  const applyDialog = $("#applyTemplateDialog");
+  let applyingTemplate;
+  function openTemplateApply(template) {
+    applyingTemplate = template;
+    $("#templateApplyName").textContent = `Template · ${template.name}`;
+    const fields = $("#templateTargets");
+    fields.replaceChildren(fields.querySelector("legend"));
+    for (const timer of timers) {
+      const label = document.createElement("label");
+      const input = Object.assign(document.createElement("input"), { type: "checkbox", value: timer.id });
+      label.append(input, timer.name || "Untitled");
+      fields.append(label);
+    }
+    if (!timers.length) fields.append("Create a timer before applying a template.");
+    applyDialog.querySelectorAll("input").forEach(input => { input.checked = input.defaultChecked; });
+    describeTemplateApply();
+    applyDialog.showModal();
+  }
+  function templateSelection() {
+    return {
+      groups: [...applyDialog.querySelectorAll(".template-apply-fields:not(#templateTargets) input:checked")].map(input => input.value),
+      selected: new Set([...$("#templateTargets").querySelectorAll("input:checked")].map(input => input.value))
+    };
+  }
+  function describeTemplateApply() {
+    const { groups, selected } = templateSelection();
+    const restricted = groups.includes("appearance") && applyingTemplate.style === "pro" && !userCanUseProMode();
+    $("#templateApplySave").disabled = !groups.length || !selected.size || restricted;
+    $("#templateApplySummary").textContent = restricted ? "This animation requires Beta Tester access or higher."
+      : `${selected.size} selected · Start times, deadlines, and loops stay as set.`;
+  }
+  applyDialog.addEventListener("change", describeTemplateApply);
+  $("#templateApplySave").addEventListener("click", async () => {
+    const { groups, selected } = templateSelection();
+    const save = $("#templateApplySave");
+    save.disabled = true;
+    try {
+      const updated = timers.map(timer => {
+        if (!selected.has(String(timer.id))) return timer;
+        const next = { ...timer };
+        for (const group of groups) {
+          for (const key of templateGroups[group]) {
+            if (Object.hasOwn(applyingTemplate, key)) next[key] = structuredClone(applyingTemplate[key]);
+            else delete next[key];
+          }
+        }
+        if (groups.includes("appearance")) {
+          next.mb_plan = planMultiBar(Math.max(1000, next.total0 || baseTotal(next)), next.mb_bars, next.mb_ticks);
+          if (next.style === "pro") ensureProSplitState(next);
+        }
+        if (groups.includes("alerts")) {
+          next.triggers ||= [];
+          next._firedMap = {};
+          const elapsed = Math.max(0, (next.total0 || baseTotal(next)) - remainingMs(next));
+          next._kMap = Object.fromEntries(next.triggers.filter(trigger => trigger.type === "interval")
+            .map(trigger => [trigger.id, Math.floor(elapsed / ((trigger.intervalSec || 1) * 1000))]));
+        }
+        return next;
+      });
+      await updateAndSaveTimers(updated);
+      applyDialog.close();
+      templateMenu.classList.remove("open");
+      tplBtn.setAttribute("aria-expanded", "false");
+      tplBtn.focus();
+    } catch (error) {
+      $("#templateApplySummary").textContent = "Could not apply this template. Check browser storage.";
+      save.disabled = false;
+    }
+  });
   registerServiceWorker();
   updateUIForLoginState();
   load();
