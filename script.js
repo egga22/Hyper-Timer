@@ -3424,7 +3424,7 @@
     }
   }
   
-  async function syncTimers() {
+  async function syncTimers({ includePreferences = false } = {}) {
     const account = currentUser?.id;
     if (!account) return;
     if (syncInFlight) return syncInFlight;
@@ -3486,9 +3486,13 @@
         updateUIForLoginState();
         render();
       }
-      if (!verifiedTimerBoard) {
+      if (!verifiedTimerBoard || includePreferences) {
         const prefs = remote.Settings ?? remote.settings ?? remote.preferences;
-        if (prefs && typeof prefs === "object") applyPreferencesToState(prefs, { save: true });
+        if (prefs && typeof prefs === "object") {
+          applyPreferencesToState(prefs, { save: true });
+        } else if (includePreferences) {
+          await pushPreferencesToCloud();
+        }
       }
       verifiedTimerBoard = true;
       renderSyncRecovery();
@@ -4511,8 +4515,10 @@
     button.addEventListener("click", () => document.getElementById(button.dataset.closeFullscreen).close());
   });
 
-  $("#settingsFullscreenControls").addEventListener("change", () => {
+  $("#settingsFullscreenControls").addEventListener("change", async () => {
     applyPreferencesToState({ ...userPreferences, fullscreenControls: readFullscreenControls($("#settingsFullscreenControls")) });
+    try { await pushPreferencesToCloud(); }
+    catch (error) { console.warn("Full-screen preferences are saved on this device.", error); }
   });
   $("#f_fullscreenOverride").addEventListener("change", event => {
     $("#timerFullscreenControls").querySelectorAll("input").forEach(input => { input.disabled = event.target.value !== "custom"; });
@@ -4577,7 +4583,7 @@
     openAuthDialog(true);
   });
   if (settingsLogoutBtn) settingsLogoutBtn.addEventListener('click', handleLogout);
-  settingsSyncBtn.addEventListener('click', syncTimers);
+  settingsSyncBtn.addEventListener("click", () => syncTimers({ includePreferences: true }));
   $("#syncRecoveryBtn").addEventListener("click", () => {
     if (!currentUser) return;
     const history = JSON.parse(localStorage.getItem(syncStorageKey("recovery", currentUser.id)) || "[]");
