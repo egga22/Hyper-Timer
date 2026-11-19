@@ -2904,12 +2904,8 @@
     templates.forEach(tpl=>{
       const row=document.createElement("div"); row.className="template-item";
       const meta=`<div class='note'>${tpl.style} • ${tpl.units} • ${(tpl.triggers?.length||0)} trig</div>`;
-      row.innerHTML=`<div style='display:flex;justify-content:space-between;gap:8px;align-items:center'><div>${escapeHtml(tpl.name)}</div><div><button class='btn' data-act='use'>Use</button> <button class='btn' data-act='apply'>Apply to timers</button> <button class='btn' data-act='rename'>Rename</button> <button class='btn' data-act='edit'>Edit</button> <button class='btn' data-act='del'>Delete</button></div></div>${meta}`;
+      row.innerHTML=`<div style='display:flex;justify-content:space-between;gap:8px;align-items:center'><div>${escapeHtml(tpl.name)}</div><div><button class='btn' data-act='use'>Use</button> <button class='btn' data-act='rename'>Rename</button> <button class='btn' data-act='edit'>Edit</button> <button class='btn' data-act='del'>Delete</button></div></div>${meta}`;
       row.querySelector("[data-act='use']").addEventListener("click", (e)=>{ e.stopPropagation(); templateMenu.classList.remove("open"); if (tplBtn) tplBtn.setAttribute("aria-expanded", "false"); openEditor(null, tpl); });
-      row.querySelector("[data-act='apply']").addEventListener("click", event => {
-        event.stopPropagation();
-        openTemplateApply(tpl);
-      });
       row.querySelector("[data-act='edit']").addEventListener("click", (e)=>{ e.stopPropagation(); templateMenu.classList.remove("open"); if (tplBtn) tplBtn.setAttribute("aria-expanded", "false"); openEditor(null, tpl); $("#dialogTitle").textContent = "Edit Template"; });
       row.querySelector("[data-act='rename']").addEventListener("click", (e)=>{
         e.stopPropagation();
@@ -3054,6 +3050,11 @@
   function openEditor(id=null, template=null){
     $("#dialogTitle").textContent = id ? "Edit Timer" : (template ? "New from Template" : "New Timer");
     editId = id;
+    templateAlertSource = null;
+    templateAppearanceSource = null;
+    $("#timerApplyOpen").hidden = !id || !templates.length;
+    $("#timerTemplateStaged").hidden = true;
+    f.doneSound.value = "";
     const draftStyle = template?.style || getDefaultTimerStyle();
     const draftUnits = template?.units || getDefaultTimerUnits();
     const draft = id ? timers.find(x=>x.id===id) : {
@@ -3778,10 +3779,10 @@
       alert("Pro Mode is limited to Beta Tester or higher accounts.");
       return;
     }
-    const existingMap = new Map((existing?.triggers||[]).map(e=>[e.id,e]));
+    const existingMap = new Map(((templateAlertSource || existing)?.triggers||[]).map(e=>[e.id,e]));
     const triggers = await collectTrEntries(existingMap);
 
-    let doneSoundDataUrl = existing?.doneSoundDataUrl || null;
+    let doneSoundDataUrl = (templateAlertSource || existing)?.doneSoundDataUrl || null;
     if (f.doneSound.files && f.doneSound.files[0]){
       const dataUrl = await new Promise(res=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.readAsDataURL(f.doneSound.files[0]); });
       doneSoundDataUrl = dataUrl;
@@ -3867,6 +3868,10 @@
       applySaveAnimationBehavior(record, existing, behavior, now());
     }
     if (record.style === "pro"){
+      if (templateAppearanceSource?.style === "pro") {
+        record.splitStyles = structuredClone(templateAppearanceSource.splitStyles || PRO_SPLIT_STYLES);
+        record.splitSettings = structuredClone(templateAppearanceSource.splitSettings || null);
+      }
       ensureProSplitState(record);
     }
     const i = timers.findIndex(x=>x.id===record.id);
@@ -4718,80 +4723,60 @@
   document.querySelectorAll('[data-close-dialog="applyTemplateDialog"]').forEach(button => {
     button.addEventListener("click", () => $("#applyTemplateDialog").close());
   });
-  const templateGroups = {
-    appearance: ["style", "color", "color2", "units", "format", "ring_thickness", "ease", "tick", "ms",
-      "dotsCount", "mb_bars", "mb_ticks", "letters_n", "splitStyles", "splitSettings"],
-    alerts: ["triggers", "doneSoundDataUrl", "doneTts"],
-    fullscreen: ["fullscreenControls"]
-  };
   const applyDialog = $("#applyTemplateDialog");
-  let applyingTemplate;
-  function openTemplateApply(template) {
-    applyingTemplate = template;
-    $("#templateApplyName").textContent = `Template · ${template.name}`;
-    const fields = $("#templateTargets");
-    fields.replaceChildren(fields.querySelector("legend"));
-    for (const timer of timers) {
-      const label = document.createElement("label");
-      const input = Object.assign(document.createElement("input"), { type: "checkbox", value: timer.id });
-      label.append(input, timer.name || "Untitled");
-      fields.append(label);
-    }
-    if (!timers.length) fields.append("Create a timer before applying a template.");
+  const templatePicker = $("#templateApplySource");
+  let templateAlertSource = null;
+  let templateAppearanceSource = null;
+  const templateGroups = () => [...applyDialog.querySelectorAll("input:checked")].map(input => input.value);
+
+  $("#timerApplyOpen").addEventListener("click", () => {
+    templatePicker.replaceChildren(...templates.map(template => new Option(template.name, template.id)));
     applyDialog.querySelectorAll("input").forEach(input => { input.checked = input.defaultChecked; });
     describeTemplateApply();
     applyDialog.showModal();
-  }
-  function templateSelection() {
-    return {
-      groups: [...applyDialog.querySelectorAll(".template-apply-fields:not(#templateTargets) input:checked")].map(input => input.value),
-      selected: new Set([...$("#templateTargets").querySelectorAll("input:checked")].map(input => input.value))
-    };
-  }
+  });
   function describeTemplateApply() {
-    const { groups, selected } = templateSelection();
-    const restricted = groups.includes("appearance") && applyingTemplate.style === "pro" && !userCanUseProMode();
-    $("#templateApplySave").disabled = !groups.length || !selected.size || restricted;
+    const template = templates.find(item => item.id === templatePicker.value);
+    const groups = templateGroups();
+    const restricted = groups.includes("appearance") && template?.style === "pro" && !userCanUseProMode();
+    $("#templateApplySave").disabled = !template || !groups.length || restricted;
     $("#templateApplySummary").textContent = restricted ? "This animation requires Beta Tester access or higher."
-      : `${selected.size} selected · Start times, deadlines, and loops stay as set.`;
+      : "Timing fields stay as set in the editor. Save the timer to apply these changes.";
   }
   applyDialog.addEventListener("change", describeTemplateApply);
-  $("#templateApplySave").addEventListener("click", async () => {
-    const { groups, selected } = templateSelection();
-    const save = $("#templateApplySave");
-    save.disabled = true;
-    try {
-      const updated = timers.map(timer => {
-        if (!selected.has(String(timer.id))) return timer;
-        const next = { ...timer };
-        for (const group of groups) {
-          for (const key of templateGroups[group]) {
-            if (Object.hasOwn(applyingTemplate, key)) next[key] = structuredClone(applyingTemplate[key]);
-            else delete next[key];
-          }
-        }
-        if (groups.includes("appearance")) {
-          next.mb_plan = planMultiBar(Math.max(1000, next.total0 || baseTotal(next)), next.mb_bars, next.mb_ticks);
-          if (next.style === "pro") ensureProSplitState(next);
-        }
-        if (groups.includes("alerts")) {
-          next.triggers ||= [];
-          next._firedMap = {};
-          const elapsed = Math.max(0, (next.total0 || baseTotal(next)) - remainingMs(next));
-          next._kMap = Object.fromEntries(next.triggers.filter(trigger => trigger.type === "interval")
-            .map(trigger => [trigger.id, Math.floor(elapsed / ((trigger.intervalSec || 1) * 1000))]));
-        }
-        return next;
-      });
-      await updateAndSaveTimers(updated);
-      applyDialog.close();
-      templateMenu.classList.remove("open");
-      tplBtn.setAttribute("aria-expanded", "false");
-      tplBtn.focus();
-    } catch (error) {
-      $("#templateApplySummary").textContent = "Could not apply this template. Check browser storage.";
-      save.disabled = false;
+  $("#templateApplySave").addEventListener("click", () => {
+    const template = templates.find(item => item.id === templatePicker.value);
+    if (!template) return;
+    const groups = templateGroups();
+    if (groups.includes("appearance")) {
+      templateAppearanceSource = template;
+      f.style.value = template.style || "bar";
+      f.color.value = template.color || "#6c7bff";
+      f.color2.value = template.color2 || f.color.value;
+      f.units.value = template.units || "auto";
+      f.format.value = resolveFormatForUnits(f.units.value, template.format);
+      f.ring_thickness.value = template.ring_thickness ?? 10;
+      f.ease.value = template.ease || "linear";
+      f.tick.value = template.tick ?? 100;
+      f.ms.value = template.ms || "off";
+      for (const key of ["mb_bars", "mb_ticks", "letters_n"]) f[key].value = template[key] ?? "";
+      f.style.dispatchEvent(new Event("change"));
+      f.units.dispatchEvent(new Event("change"));
     }
+    if (groups.includes("alerts")) {
+      templateAlertSource = template;
+      renderTrList(template.triggers || []);
+      f.doneSound.value = "";
+      f.doneTts.value = template.doneTts || "";
+    }
+    if (groups.includes("fullscreen")) {
+      const custom = Array.isArray(template.fullscreenControls);
+      $("#f_fullscreenOverride").value = custom ? "custom" : "default";
+      fillFullscreenControls($("#timerFullscreenControls"), effectiveFullscreenControls(template), !custom);
+    }
+    $("#timerTemplateStaged").textContent = `Loaded settings from ${template.name}. Save to apply them.`;
+    $("#timerTemplateStaged").hidden = false;
+    applyDialog.close();
   });
   registerServiceWorker();
   updateUIForLoginState();
