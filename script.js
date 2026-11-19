@@ -3996,7 +3996,7 @@
     actions.className = "actions";
     const pauseBtn = (t.mode==="datetime" || t.mode==="smart") ? "" : `<button class="action-btn" data-act="pause" title="${t.paused?'Resume':'Pause'}">⏯︎</button>`;
     const fullscreenBtn = `<button class="action-btn" data-act="fullscreen" title="Fullscreen">⛶</button>`;
-    actions.innerHTML = `${pauseBtn}${fullscreenBtn}<button class="action-btn" data-act="pin" title="${t.pinned ? "Unpin timer" : "Pin timer"}" aria-label="Pin timer" aria-pressed="${t.pinned === true}">◆</button><button class="action-btn" data-act="duplicate" title="Duplicate timer" aria-label="Duplicate timer">⧉</button><button class="action-btn" data-act="prestige" title="Prestige">★</button><button class="action-btn" data-act="tplsave" title="Save template">⇪</button><button class="action-btn" data-act="edit" title="Edit">✎</button><button class="action-btn" data-act="delete" title="Delete">🗑</button>`;
+    actions.innerHTML = `${pauseBtn}${fullscreenBtn}<button class="action-btn" data-act="pin" title="${t.pinned ? "Unpin timer" : "Pin timer"}" aria-label="Pin timer" aria-pressed="${t.pinned === true}"><span class="timer-pin" aria-hidden="true"></span></button><button class="action-btn" data-act="duplicate" title="Duplicate timer" aria-label="Duplicate timer">⧉</button><button class="action-btn" data-act="prestige" title="Prestige">★</button><button class="action-btn" data-act="tplsave" title="Save template">⇪</button><button class="action-btn" data-act="edit" title="Edit">✎</button><button class="action-btn" data-act="delete" title="Delete">🗑</button>`;
     const fullscreenControls = effectiveFullscreenControls(t);
     actions.querySelectorAll("[data-act]").forEach(button => {
       button.classList.toggle("fullscreen-visible", fullscreenControls.includes(button.dataset.act));
@@ -4011,7 +4011,6 @@
     title.appendChild(dotEl);
     const nameEl = document.createElement("span");
     nameEl.textContent = t.name || "Untitled";
-    if (t.pinned === true) card.dataset.pinned = "true";
     title.appendChild(nameEl);
     if (timerLoopsEnabled(t) && t.mode === "duration"){
       const badgeEl = document.createElement("span");
@@ -4024,12 +4023,6 @@
       badgeEl.className = "badge";
       badgeEl.textContent = `Prestige ${t.prestigeLevel}`;
       title.appendChild(badgeEl);
-    }
-    if (t.pinned === true) {
-      const badge = document.createElement("span");
-      badge.className = "pin-badge";
-      badge.textContent = "Pinned";
-      title.append(badge);
     }
     card.appendChild(title);
 

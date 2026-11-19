@@ -187,6 +187,8 @@ a:focus-visible{outline:2px solid var(--accent); outline-offset:3px;}
 .fullscreen-popup-footer{display:flex; justify-content:flex-end; padding:0 18px 18px;}
 .fullscreen-controls-dialog .fullscreen-settings-footnote{display:grid; gap:4px;}
 
-.card[data-pinned="true"]{border-color:#4e517c}.pin-badge{margin-left:auto; color:#cbd0ff; font-size:.7rem; border:1px solid #515784; border-radius:8px; padding:.22rem .43rem}.action-btn[data-act="pin"]{font-size:.8rem;color:var(--text)}.action-btn[data-act="pin"][aria-pressed="true"]{background:#333766;border-color:#777fec}
+[data-act="pin"]{color:var(--text)}
+.timer-pin{pointer-events:none;display:block;width:16px;height:16px;background:currentColor;clip-path:polygon(25% 5%,75% 5%,75% 20%,66% 20%,66% 43%,85% 63%,85% 71%,55% 71%,50% 100%,45% 71%,15% 71%,15% 63%,34% 43%,34% 20%,25% 20%);transform:rotate(35deg)}
+[data-act="pin"][aria-pressed="true"] .timer-pin{transform:none}
 
 @media(max-width:380px){.grid{grid-template-columns:minmax(0,1fr)}.card .actions{gap:4px}.card .action-btn{width:30px;height:32px}}
