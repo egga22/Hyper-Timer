@@ -123,6 +123,9 @@
       <button type="button" class="fullscreen-settings-launch" id="timerFullscreenOpen" aria-haspopup="dialog" aria-controls="timerFullscreenDialog">
         <span><strong>Full-screen controls</strong><span class="note">Choose the controls for this timer.</span></span><span aria-hidden="true">›</span>
       </button>
+      <button type="button" class="fullscreen-settings-launch" id="steadyDigitsOpen" aria-haspopup="dialog">
+        <span><strong>Countdown digits</strong><span class="note">Keep the readout aligned as the countdown changes.</span></span><span aria-hidden="true">›</span>
+      </button>
       <div id="color2Field" class="field invisible">
         <label>Secondary color</label>
         <input id="f_color2" type="color" value="#ff6c7b">
@@ -500,6 +503,16 @@
         <div class="fullscreen-settings-footnote"><span>Exit Full Screen is always available.</span><span>Saved automatically · Customize any timer in its editor.</span></div>
       </section>
   <div class="fullscreen-popup-footer"><button type="button" class="btn primary" data-close-fullscreen="fullscreenSettingsDialog">Done</button></div>
+</dialog>
+
+<dialog class="fullscreen-controls-dialog" id="steadyDigitsDialog" aria-labelledby="steadyDigitsDialogHeading">
+  <div class="dialog-header"><h2 id="steadyDigitsDialogHeading">Countdown digits</h2><button class="btn" type="button" data-close-dialog="steadyDigitsDialog" aria-label="Close">✕</button></div>
+  <div class="dialog-body">
+    <label class="toggle"><input class="toggle-input" id="steadyDigits" type="checkbox"><span>Use steady digits</span></label>
+    <div class="note">Monospaced digits and a fixed-width readout on the board and in full screen.</div>
+    <div class="steady-preview" aria-hidden="true"><span id="steadyPreviewValue">1m 00s</span></div>
+    </div>
+  <div class="fullscreen-popup-footer"><button class="btn primary" type="button" data-close-dialog="steadyDigitsDialog">Done</button></div>
 </dialog>
 
 <script src="script.js" defer></script>

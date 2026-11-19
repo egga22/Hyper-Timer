@@ -186,3 +186,8 @@ a:focus-visible{outline:2px solid var(--accent); outline-offset:3px;}
 .fullscreen-popup-content{border:0; border-radius:0; background:transparent;}
 .fullscreen-popup-footer{display:flex; justify-content:flex-end; padding:0 18px 18px;}
 .fullscreen-controls-dialog .fullscreen-settings-footnote{display:grid; gap:4px;}
+
+.steady-digits .flip,.steady-preview{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-variant-numeric:tabular-nums;letter-spacing:0}
+.steady-digits .flip{width:min(100%,17ch);overflow-wrap:anywhere;transform:none!important}
+.steady-preview{width:min(100%,17ch);border:1px solid #383d63;background:#10121a;border-radius:12px;padding:9px 14px;text-align:center;font-size:1.65rem;font-weight:800;justify-self:center}
+#steadyDigitsDialog:not(:has(#steadyDigits:checked)) .steady-preview{width:fit-content;font-family:inherit;min-width:3ch}
