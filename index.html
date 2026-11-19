@@ -20,7 +20,8 @@
         <span class="label">Settings</span>
       </button>
       <button class="btn" id="exportBtn">Export</button>
-      <label class="btn" for="importInput">Import <input id="importInput" type="file" accept="application/json" style="display:none;"></label>
+      <button class="btn" id="importBtn" type="button">Import</button>
+      <input id="importInput" type="file" accept=".json,application/json" hidden>
       <button class="btn" id="tplBtn" aria-haspopup="menu" aria-expanded="false">Templates ▾</button>
       <button class="btn primary" id="addBtn">New</button>
     </div>
@@ -368,9 +369,6 @@
       <button type="button" class="fullscreen-settings-launch" id="settingsFullscreenOpen" aria-haspopup="dialog" aria-controls="fullscreenSettingsDialog">
         <span><strong>Full-screen controls</strong><span class="note">Choose the default controls for your timers.</span></span><span aria-hidden="true">›</span>
       </button>
-      <button type="button" class="fullscreen-settings-launch" id="backupOpen" aria-haspopup="dialog">
-        <span><strong>Backups</strong><span class="note">Save or restore timers, templates, and preferences.</span></span><span aria-hidden="true">›</span>
-      </button>
       <div id="settingsSignedOut" class="settings-section">
         <div class="note">Sign in to sync timers and unlock experimental features.</div>
         <div class="settings-actions">
@@ -506,13 +504,9 @@
 </dialog>
 
 <dialog class="fullscreen-controls-dialog" id="backupDialog" aria-labelledby="backupDialogHeading">
-  <div class="dialog-header"><h2 id="backupDialogHeading">Backups</h2><button class="btn" type="button" data-close-dialog="backupDialog" aria-label="Close">✕</button></div>
+  <div class="dialog-header"><h2 id="backupDialogHeading">Import backup</h2><button class="btn" type="button" data-close-dialog="backupDialog" aria-label="Close">✕</button></div>
   <div class="dialog-body">
-    <div class="settings-section"><strong>Download a full backup</strong><div class="note">Includes timers, templates, and settings for the active account or this device.</div>
-    <div class="settings-actions"><button type="button" class="btn primary" id="backupDownload">Download backup</button></div></div>
-    <div class="settings-section"><strong>Restore a backup</strong><div class="note">A full restore replaces this board, its templates, and its settings. Download a backup first to keep the current setup.</div>
-    <label for="backupFile">Backup file</label><input id="backupFile" type="file" accept=".json,application/json">
-    <div class="note" id="backupSummary" role="status"></div><div class="settings-actions"><button type="button" class="btn" id="backupRestore" disabled>Restore setup</button></div></div>
+    <div class="settings-section"><div class="note" id="backupSummary" role="status"></div><div class="settings-actions"><button type="button" class="btn" id="backupRestore" disabled>Import</button></div></div>
     </div>
   <div class="fullscreen-popup-footer"><button class="btn primary" type="button" data-close-dialog="backupDialog">Done</button></div>
 </dialog>
