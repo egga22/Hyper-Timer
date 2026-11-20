@@ -101,17 +101,16 @@
       </div>
       <div class="settings-section invisible" id="smartDeadlineTools">
         <div class="settings-actions"><button class="btn" type="button" id="smartDeadlineRefresh">Refresh deadline</button></div>
-        <div class="note" id="smartDeadlineResult" role="status">Check the current deadline for this market URL.</div>
+        <div class="note" id="smartDeadlineResult" role="status"></div>
       </div>
       <div id="startOverrideRow" class="field invisible">
         <label for="f_startWhen">Start date & time (optional)</label>
         <input id="f_startWhen" type="datetime-local">
-        <div class="note">For 'End date & time' or 'Smart time' modes. Controls where the animation starts.</div>
       </div>
       <div id="startPctRow" class="field invisible">
         <label for="f_startPct">Or starting percentage (0–100)</label>
         <input id="f_startPct" type="number" min="0" max="100" step="0.1" placeholder="e.g., 35">
-        <div class="note">If set (and no start date), we back-compute a virtual start so progress equals this % right now.</div>
+        <div class="note">Leave the start date blank to use this percentage.</div>
       </div>
       <div class="field-row">
         <div class="field">
@@ -136,7 +135,6 @@
       <div id="color2Field" class="field invisible">
         <label for="f_color2">Secondary color</label>
         <input id="f_color2" type="color" value="#ff6c7b">
-        <div class="note">Used for the Color animation style.</div>
       </div>
       <div id="customFormatRow" class="field invisible">
         <label for="f_format">Custom time format</label>
@@ -187,7 +185,7 @@
           <button class="btn" type="button" id="addTimeBtn">+ Time</button>
           <button class="btn" type="button" id="addIntBtn">+ Interval</button>
         </div>
-        <div class="note">Intervals are aligned to elapsed multiples. Web cannot duck other apps’ volume; Android app will use Audio Focus.</div>
+        <div class="note">Intervals are measured from the timer’s start. Browser alerts can’t lower the volume of other apps.</div>
       </details>
       <details>
         <summary>Completion</summary>
@@ -209,9 +207,7 @@
             <input class="toggle-input" type="checkbox" id="f_loopEnabled">
             <span class="toggle-label">Loop this timer</span>
           </label>
-          <div class="note">Automatically restart this timer when it finishes.</div>
         </div>
-        <div id="loopingDurationNote" class="note invisible">This duration timer will restart immediately after completion.</div>
         <div id="loopingDatetimeFields" class="field-group invisible">
           <div class="field-row">
             <div class="field">
@@ -235,7 +231,6 @@
               <div id="loopShortTermSummaryText" class="shortterm-summary-text">Add events to get started.</div>
               <button class="btn" type="button" id="loopShortTermEditBtn">Edit schedule</button>
             </div>
-            <div class="note">Events define the exact times this timer targets. We'll always jump to the next upcoming event.</div>
           </div>
           <div id="loopingWeeklyControls" class="field-group invisible">
             <div class="field">
@@ -256,7 +251,6 @@
                 <option value="0">Start this week</option>
                 <option value="1">Start next week</option>
               </select>
-              <div class="note">Choose which week counts as the first in the rotation.</div>
             </div>
           </div>
           <div id="loopingMonthlyControls" class="field-group invisible">
@@ -338,12 +332,9 @@
         <summary>Timer button order</summary>
         <div id="timerButtonOrderContent"></div>
       </details>
-      <div class="footer-row">
-        <div class="note">Tip: long timers look great with Multi Bar. Save layouts as templates.</div>
-        <div>
-          <button class="btn" value="cancel">Cancel</button>
-          <button class="btn primary" id="saveBtn" type="button">Save</button>
-        </div>
+      <div class="footer-row editor-footer">
+        <button class="btn" value="cancel">Cancel</button>
+        <button class="btn primary" id="saveBtn" type="button">Save</button>
       </div>
     </div>
   </form>
@@ -356,8 +347,8 @@
       <button class="btn" value="cancel">✕</button>
     </div>
     <div class="dialog-body shortterm-dialog-body">
-      <div class="note">Create events for classes, meetings, or any appointments that move around. We'll always pick the next one.</div>
-      <div id="shortTermEventsEmpty" class="shortterm-empty">No events yet — add one to begin.</div>
+      <div class="note">Counts down to the next scheduled event.</div>
+      <div id="shortTermEventsEmpty" class="shortterm-empty">No events scheduled.</div>
       <div id="shortTermEventsList" class="shortterm-events"></div>
       <div class="shortterm-actions">
         <button class="btn" type="button" id="addShortTermWeeklyBtn">Add weekly event</button>
@@ -393,7 +384,7 @@
     </div>
     <div class="dialog-body settings-body">
       <div id="settingsSignedOut" class="settings-section">
-        <div class="note">Sign in to sync timers and unlock experimental features.</div>
+        <div class="note">Sign in to sync timers.</div>
         <div class="settings-actions">
           <button class="btn" type="button" id="settingsLoginBtn">Log In</button>
           <button class="btn primary" type="button" id="settingsSignupBtn">Sign Up</button>
@@ -413,10 +404,7 @@
         </button>
         <div class="settings-role invisible" id="settingsRoleDisplay"></div>
         <div class="settings-section invisible" id="settingsLoopsSection">
-          <div class="settings-summary">
-            <div class="note">Loops</div>
-            <div class="settings-value">Automatically restart timers when they finish.</div>
-          </div>
+          <div class="settings-value">Loops</div>
           <label class="toggle">
             <input class="toggle-input" type="checkbox" id="settingsLoopsToggle">
             <span class="toggle-label">Enable looping tools</span>
@@ -424,10 +412,7 @@
           <div class="note">Short term schedules remain limited to Owner and Beta Tester accounts.</div>
         </div>
         <div class="settings-section invisible" id="settingsDefaultsSection">
-          <div class="settings-summary">
-            <div class="note">Default timer setup</div>
-            <div class="settings-value">Choose the defaults for new timers.</div>
-          </div>
+          <div class="settings-value">Default timer setup</div>
           <div class="field">
             <label for="settingsDefaultStyle">Default animation</label>
             <select id="settingsDefaultStyle"></select>
@@ -442,19 +427,16 @@
               <option value="Standard">Standard (1d 2h • 3m 5s)</option>
               <option value="Verbose">Verbose (01:23:45 • 12:34 • 5s)</option>
             </select>
-            <div class="note">Applies when timers use the Auto units display.</div>
           </div>
           <div class="field invisible" id="settingsCustomFormatRow">
             <label for="settingsCustomFormat">Default custom format</label>
             <input id="settingsCustomFormat" type="text" placeholder="{HH}:{mm}:{ss}">
-            <div class="note">Used when Default units display is Custom.</div>
           </div>
           <div class="field">
             <label class="toggle">
               <input class="toggle-input" type="checkbox" id="settingsPercentHover">
               <span class="toggle-label">Show time to next percent on hover</span>
             </label>
-            <div class="note">When hovering over percentage displays, show duration until next whole percentage.</div>
           </div>
           <div class="field">
             <label for="settingsSaveAnimation">When saving a timer without a fixed start</label>
@@ -477,7 +459,6 @@
       <section class="settings-section" aria-labelledby="settingsFullscreenLabel">
         <div class="settings-summary">
           <div class="settings-value" id="settingsFullscreenLabel">Full screen</div>
-          <div class="note">Set the default layout and screen wake behavior.</div>
         </div>
         <div class="settings-actions">
           <button type="button" class="btn" id="settingsFullscreenOpen" aria-haspopup="dialog" aria-controls="fullscreenSettingsDialog">Full-screen options</button>
@@ -486,7 +467,6 @@
       <section class="settings-section" aria-labelledby="settingsButtonOrderLabel">
         <div class="settings-summary">
           <div class="settings-value" id="settingsButtonOrderLabel">Timer buttons</div>
-          <div class="note">Choose which buttons appear and in what order, in either view.</div>
         </div>
         <div class="settings-actions">
           <button type="button" class="btn" id="settingsButtonOrderOpen" aria-haspopup="dialog" aria-controls="buttonOrderDialog">Timer button order</button>
@@ -526,10 +506,6 @@
 <dialog id="fullscreenSettingsDialog" class="fullscreen-controls-dialog" aria-labelledby="fullscreenSettingsHeading">
   <div class="dialog-header"><h2 id="fullscreenSettingsHeading">Full screen</h2><button type="button" class="btn" data-close-fullscreen="fullscreenSettingsDialog" aria-label="Close full-screen controls">✕</button></div>
       <section class="fullscreen-settings fullscreen-popup-content">
-        <div class="fullscreen-settings-heading">
-          <div><p>Choose the default layout and screen wake behavior.</p></div>
-          <span class="fullscreen-settings-badge">Default for all timers</span>
-        </div>
         <section class="fullscreen-category-section"><h3>Keep screen awake</h3><label class="toggle"><input id="awakeBoard" class="toggle-input" type="checkbox"><span>On the timer board</span></label>
                  <label class="toggle"><input id="awakeFullscreen" class="toggle-input" type="checkbox"><span>In full screen by default</span></label>
                  <div class="note" id="awakeStatus" role="status">Saved on this device.</div></section>
@@ -540,7 +516,7 @@
     </div>
     <div id="globalLayoutPreview" class="layout-preview" aria-hidden="true"><div class="layout-sample">08:42</div><div class="layout-track"><i></i></div></div>
 </div>
-        <div class="fullscreen-settings-footnote"><span>Saved automatically · Customize any timer in its editor.</span></div>
+        <div class="note">Saved automatically.</div>
       </section>
   <div class="fullscreen-popup-footer"><button type="button" class="btn primary" data-close-fullscreen="fullscreenSettingsDialog">Done</button></div>
 </dialog>
@@ -599,8 +575,7 @@
         <button type="button" class="btn" data-order-mode="normal">Normal</button>
         <button type="button" class="btn" data-order-mode="fullscreen">Full screen</button>
       </div>
-      <p class="note button-order-note" id="buttonOrderHelp">Drag handles or use arrow keys to reorder left to right. Check Show to display a button.</p>
-      <ol id="buttonOrderList" aria-describedby="buttonOrderHelp"></ol>
+      <ol id="buttonOrderList"></ol>
       <button type="button" class="btn" id="buttonOrderReset" hidden>Reset</button>
     </div>
   </div>

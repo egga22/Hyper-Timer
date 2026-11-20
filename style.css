@@ -88,6 +88,7 @@ body.has-fullscreen-fallback{overflow:hidden;}
 .progressbar{width:100%; height:10px; background:#0f1016; border-radius:999px; overflow:hidden; border:1px solid rgba(255,255,255,.08)}
 .progressbar > div{height:100%; width:0%}
 .footer-row{display:flex; justify-content:space-between; align-items:center; margin-top:.5rem; gap:.5rem; flex-wrap:wrap}
+.editor-footer{justify-content:flex-end}
 .fab{position:fixed; right:14px; bottom:16px; z-index:15; background:var(--accent); color:#0b0c10; border:none; border-radius:999px; width:56px; height:56px; display:grid; place-items:center; font-size:24px; box-shadow:0 14px 28px rgba(108,123,255,.3); cursor:pointer}
 dialog{width:min(980px,96vw); border:none; border-radius:16px; background:#121420; color:var(--text); padding:0}
 dialog::backdrop{background:rgba(0,0,0,.6)}
@@ -181,12 +182,8 @@ a:focus-visible{outline:2px solid var(--accent); outline-offset:3px;}
 
 /* Full-screen preferences share the app's dark surfaces and accent. */
 .fullscreen-settings{padding:18px; border:1px solid rgba(255,255,255,.09); border-radius:14px; background:rgba(255,255,255,.025); display:grid; gap:16px; min-width:0;}
-.fullscreen-settings-heading{display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;}
 .fullscreen-settings h3{margin:0; font-size:1rem; font-weight:700;}
-.fullscreen-settings p{margin:5px 0 0; color:var(--muted); font-size:.85rem; line-height:1.5;}
-.fullscreen-settings-badge{font-size:.72rem; color:var(--muted); padding:5px 9px; border:1px solid rgba(255,255,255,.1); border-radius:999px; white-space:nowrap;}
-.fullscreen-settings-footnote{display:flex; justify-content:space-between; gap:8px 16px; flex-wrap:wrap; color:var(--muted); font-size:.75rem; line-height:1.5;}
-@media(max-width:600px){.fullscreen-settings{padding:14px;}.fullscreen-settings-badge{display:none;}}
+@media(max-width:600px){.fullscreen-settings{padding:14px;}}
 
 .fullscreen-settings-launch{display:flex; align-items:center; justify-content:space-between; gap:16px; padding:15px 16px; width:100%; text-align:left; color:var(--text); background:#171925; border:1px solid rgba(255,255,255,.1); border-radius:12px; cursor:pointer; font:inherit;}
 .fullscreen-settings-launch>span:first-child{display:grid; gap:5px;}
@@ -196,7 +193,6 @@ a:focus-visible{outline:2px solid var(--accent); outline-offset:3px;}
 .fullscreen-controls-dialog h2{margin:0; font-size:1rem;}
 .fullscreen-popup-content{border:0; border-radius:0; background:transparent;}
 .fullscreen-popup-footer{display:flex; justify-content:flex-end; padding:0 18px 18px;}
-.fullscreen-controls-dialog .fullscreen-settings-footnote{display:grid; gap:4px;}
 
 #syncRecoveryOpen[hidden]{display:none}
 
@@ -303,11 +299,11 @@ button.pill{background:transparent; cursor:pointer}
 
 #timerApplyOpen[hidden]{display:none}#timerTemplateStaged{color:#c9d0ff}
 #smartDeadlineTools{padding:11px 13px;background:#181b2a;border:1px solid #32364c;border-radius:12px;gap:7px}
+#smartDeadlineResult:empty{position:absolute}
 
 .button-order-dialog{width:min(440px,92vw)}
 .button-order-modes{display:grid;grid-template-columns:1fr 1fr;gap:6px}
 .button-order-modes .btn[aria-pressed="true"]{background:#272b52;border-color:#7079e9}
-.button-order-note{margin:0}
 #buttonOrderList{display:grid;gap:5px;list-style:none;margin:0;padding:0}
 #buttonOrderList li{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:4px 9px;background:#171925;border:1px solid #343649;border-radius:9px;font-size:.9rem}
 #buttonOrderList .dragging{opacity:.6}
@@ -318,4 +314,4 @@ button.pill{background:transparent; cursor:pointer}
 .button-order-visibility{display:flex;align-items:center;gap:7px;font-size:.8rem;cursor:pointer}
 .button-order-visibility input{accent-color:var(--accent);margin:0}
 .action-btn.normal-hidden{display:none}
-#buttonOrderReset{justify-self:end}
+#buttonOrderReset{justify-self:center}

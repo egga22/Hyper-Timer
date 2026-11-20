@@ -376,7 +376,6 @@
     loopMonthlyWeekday: $("#f_loopMonthlyWeekday"),
     loopDatetimeFields: $("#loopingDatetimeFields"),
     loopMonthlyControls: $("#loopingMonthlyControls"),
-    loopDurationNote: $("#loopingDurationNote"),
     loopMonthlyDayRow: $("#loopMonthlyDayRow"),
     loopMonthlyOrdinalRow: $("#loopMonthlyOrdinalRow"),
     loopAlignRow: $("#loopingAlignRow"),
@@ -2024,9 +2023,6 @@
     const mode = f.mode ? f.mode.value : "duration";
     const supported = mode === "duration" || mode === "datetime";
     const toggleChecked = loopsAvailable && supported && !!(f.loopEnabled && f.loopEnabled.checked);
-    if (f.loopDurationNote) {
-      f.loopDurationNote.classList.toggle("invisible", !(toggleChecked && mode === "duration"));
-    }
     if (f.loopDatetimeFields) {
       f.loopDatetimeFields.classList.toggle("invisible", !(toggleChecked && mode === "datetime"));
     }
@@ -3186,7 +3182,7 @@
     $("#timerTemplateStaged").hidden = true;
     f.doneSound.value = "";
     checkedSmartDeadline = null;
-    $("#smartDeadlineResult").textContent = "Check the current deadline for this market URL.";
+    $("#smartDeadlineResult").textContent = "";
     const draftStyle = template?.style || getDefaultTimerStyle();
     const draftUnits = template?.units || getDefaultTimerUnits();
     const draft = id ? timers.find(x=>x.id===id) : {
@@ -5248,7 +5244,7 @@
     smartCheckGeneration++;
     checkedSmartDeadline = null;
     smartDeadlineRefresh.disabled = false;
-    smartDeadlineResult.textContent = "Check the current deadline for this market URL.";
+    smartDeadlineResult.textContent = "";
   }
   f.smartUrl.addEventListener("input", clearSmartDeadlineCheck);
   editor.addEventListener("close", clearSmartDeadlineCheck);
