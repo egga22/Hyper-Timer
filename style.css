@@ -212,3 +212,8 @@ a:focus-visible{outline:2px solid var(--accent); outline-offset:3px;}
 .sync-status-panel[data-state="complete"]{border-color:#386857; background:#132420;}
 :where(button, input, select, textarea, summary, [tabindex]):focus-visible{outline:3px solid #a7afff; outline-offset:3px;}
 button.pill{background:transparent; cursor:pointer}
+#deletedList{display:grid; gap:8px}.deleted-row{display:flex; gap:14px; align-items:center; justify-content:space-between; padding:12px; background:#171925; border:1px solid rgba(255,255,255,.1); border-radius:12px}.deleted-row strong{overflow-wrap:anywhere}
+
+ .settings-footer:has(button[hidden]){display:none}
+.settings-text-action{border:0;background:none;padding:4px 0;color:var(--muted);font:inherit;font-size:.8rem;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+.settings-text-action:hover{color:var(--text)}

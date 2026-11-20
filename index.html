@@ -453,6 +453,7 @@
           <div class="note" id="accountSyncDetail"></div>
         </div>
       </div>
+      <div class="settings-footer"><button type="button" class="settings-text-action" id="deletedOpen" aria-haspopup="dialog" hidden>Recently deleted</button></div>
     </div>
   </form>
 </dialog>
@@ -505,6 +506,11 @@
         </div>
 </div>
   <div class="fullscreen-popup-footer"><button class="btn primary" type="button" data-close-dialog="syncRecoveryDialog">Done</button></div>
+</dialog>
+<dialog class="fullscreen-controls-dialog" id="deletedDialog" aria-labelledby="deletedDialogHeading">
+  <div class="dialog-header"><h2 id="deletedDialogHeading">Recently deleted</h2><button class="btn" type="button" data-close-dialog="deletedDialog" aria-label="Close">✕</button></div>
+  <div class="dialog-body"><div id="deletedList"></div><p class="note" id="deletedStatus" role="status"></p></div>
+  <div class="fullscreen-popup-footer"><button class="btn primary" type="button" data-close-dialog="deletedDialog">Done</button></div>
 </dialog>
 
 <script src="script.js" defer></script>

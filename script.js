@@ -4072,6 +4072,14 @@
         openEditor(t.id);
       } else if (act==="delete"){
         if (confirm("Delete timer?")){
+          try {
+            localStorage.setItem(deletedTimerKey(), JSON.stringify([
+              { deletedAt: Date.now(), timer: t }, ...readDeletedTimers().filter(entry => entry.timer.id !== t.id)
+            ]));
+          } catch (error) {
+            alert("Free up browser storage to keep a recovery copy before deleting.");
+            return;
+          }
           const newTimers = timers.filter(x=>x.id!==t.id);
           await updateAndSaveTimers(newTimers);
         }
@@ -4096,6 +4104,7 @@
   }
 
   function render(){
+    $("#deletedOpen").hidden = !readDeletedTimers().length;
     // Remember which timer and split style was in fullscreen
     let fullscreenTimerId = null;
     let fullscreenSplitStyle = null;
@@ -4701,6 +4710,63 @@
       importInput.value = "";
       importButton.disabled = false;
     }
+  });
+  document.querySelectorAll('[data-close-dialog="deletedDialog"]').forEach(button => {
+    button.addEventListener("click", () => $("#deletedDialog").close());
+  });
+  function deletedTimerKey() {
+    return `hyperTimer_deleted_${currentUser?.id || "device"}`;
+  }
+  function readDeletedTimers() {
+    const cutoff = Date.now() - 30 * 86400000;
+    try {
+      const saved = JSON.parse(localStorage.getItem(deletedTimerKey()) || "[]");
+      return Array.isArray(saved) ? saved.filter(entry => entry?.timer && entry.deletedAt >= cutoff) : [];
+    } catch (error) {
+      return [];
+    }
+  }
+  function showDeletedTimers() {
+    const list = $("#deletedList");
+    const entries = readDeletedTimers();
+    list.replaceChildren();
+    if (!entries.length) list.textContent = "No recently deleted timers.";
+    for (const entry of entries) {
+      const row = document.createElement("div");
+      row.className = "deleted-row";
+      const copy = document.createElement("div");
+      const name = document.createElement("strong");
+      name.textContent = entry.timer.name || "Untitled";
+      const date = document.createElement("div");
+      date.className = "note";
+      date.textContent = `Deleted ${new Date(entry.deletedAt).toLocaleDateString()}`;
+      copy.append(name, date);
+      const restore = Object.assign(document.createElement("button"), { className: "btn", type: "button", textContent: "Restore" });
+      restore.addEventListener("click", async () => {
+        restore.disabled = true;
+        try {
+          const restored = migrateTimer(entry.timer);
+          if (timers.some(timer => timer.id === restored.id)) restored.id = uid("t_");
+          await updateAndSaveTimers([...timers, restored]);
+          localStorage.setItem(deletedTimerKey(), JSON.stringify(readDeletedTimers().filter(item =>
+            item.deletedAt !== entry.deletedAt || item.timer.id !== entry.timer.id
+          )));
+          $("#deletedOpen").hidden = !readDeletedTimers().length;
+          showDeletedTimers();
+          $("#deletedStatus").textContent = `Restored ${name.textContent}.`;
+        } catch (error) {
+          restore.disabled = false;
+          $("#deletedStatus").textContent = "Could not restore the timer. Check available browser storage.";
+        }
+      });
+      row.append(copy, restore);
+      list.append(row);
+    }
+  }
+  $("#deletedOpen").addEventListener("click", () => {
+    $("#deletedStatus").textContent = "";
+    showDeletedTimers();
+    $("#deletedDialog").showModal();
   });
   registerServiceWorker();
   updateUIForLoginState();
