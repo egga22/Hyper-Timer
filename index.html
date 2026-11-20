@@ -40,8 +40,9 @@
   <form method="dialog" novalidate>
     <div class="dialog-header">
       <div class="title" id="dialogTitle">New Timer</div>
-      <div style="display:flex; gap:8px; align-items:center;">
+      <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center;">
         <button class="btn" id="saveTplBtn" type="button">Save as Template</button>
+        <button class="btn" id="timerApplyOpen" type="button" aria-haspopup="dialog" hidden>Apply template</button>
         <button class="btn" id="saveTplCopy" type="button" hidden>Save a copy</button>
         <button class="btn" value="cancel" aria-label="Close dialog">✕</button>
       </div>
@@ -127,6 +128,7 @@
           </select>
         </div>
       </div>
+      <div class="note" id="timerTemplateStaged" role="status" hidden></div>
       <div id="color2Field" class="field invisible">
         <label for="f_color2">Secondary color</label>
         <input id="f_color2" type="color" value="#ff6c7b">
@@ -555,6 +557,20 @@
     <div id="pairCards"></div>
   </div>
 </dialog>
+<dialog class="fullscreen-controls-dialog" id="applyTemplateDialog" aria-labelledby="applyTemplateDialogHeading">
+  <div class="dialog-header"><h2 id="applyTemplateDialogHeading">Apply template</h2><button class="btn" type="button" data-close-dialog="applyTemplateDialog" aria-label="Close">✕</button></div>
+  <div class="dialog-body">
+    <div class="field"><label for="templateApplySource">Template</label><select id="templateApplySource"></select></div>
+    <fieldset class="template-apply-fields"><legend>Settings to replace</legend>
+      <label><input type="checkbox" value="appearance" checked> Appearance and time display</label>
+      <label><input type="checkbox" value="alerts"> Triggers and completion alerts</label>
+      <label><input type="checkbox" value="fullscreen"> Full-screen controls</label>
+    </fieldset>
+    <div class="note" id="templateApplySummary" role="status"></div>
+    </div>
+  <div class="fullscreen-popup-footer"><button class="btn primary" type="button" id="templateApplySave" disabled>Load into editor</button></div>
+</dialog>
+
 <script src="script.js" defer></script>
 </body>
 </html>

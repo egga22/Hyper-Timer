@@ -3130,6 +3130,11 @@
 
     $("#dialogTitle").textContent = id ? "Edit Timer" : (template ? "New from Template" : "New Timer");
     editId = id;
+    templateAlertSource = null;
+    templateAppearanceSource = null;
+    $("#timerApplyOpen").hidden = !id || !templates.length;
+    $("#timerTemplateStaged").hidden = true;
+    f.doneSound.value = "";
     const draftStyle = template?.style || getDefaultTimerStyle();
     const draftUnits = template?.units || getDefaultTimerUnits();
     const draft = id ? timers.find(x=>x.id===id) : {
@@ -3797,10 +3802,10 @@
       alert("Pro Mode is limited to Beta Tester or higher accounts.");
       return;
     }
-    const existingMap = new Map(((existing || editorSourceTemplate)?.triggers||[]).map(e=>[e.id,e]));
+    const existingMap = new Map(((templateAlertSource || existing || editorSourceTemplate)?.triggers||[]).map(e=>[e.id,e]));
     const triggers = await collectTrEntries(existingMap);
 
-    let doneSoundDataUrl = (existing || editorSourceTemplate)?.doneSoundDataUrl || null;
+    let doneSoundDataUrl = (templateAlertSource || existing || editorSourceTemplate)?.doneSoundDataUrl || null;
     if (f.doneSound.files && f.doneSound.files[0]){
       const dataUrl = await new Promise(res=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.readAsDataURL(f.doneSound.files[0]); });
       doneSoundDataUrl = dataUrl;
@@ -3887,6 +3892,10 @@
       applySaveAnimationBehavior(record, existing, behavior, now());
     }
     if (record.style === "pro"){
+      if (templateAppearanceSource?.style === "pro") {
+        record.splitStyles = structuredClone(templateAppearanceSource.splitStyles || PRO_SPLIT_STYLES);
+        record.splitSettings = structuredClone(templateAppearanceSource.splitSettings || null);
+      }
       ensureProSplitState(record);
     }
     const i = timers.findIndex(x=>x.id===record.id);
@@ -5099,6 +5108,64 @@
     if (document.fullscreenElement === pairStage) exitNativeFullscreenIfActive();
     pairCards.replaceChildren();
     $("#pairOpen").focus();
+  });
+  document.querySelectorAll('[data-close-dialog="applyTemplateDialog"]').forEach(button => {
+    button.addEventListener("click", () => $("#applyTemplateDialog").close());
+  });
+  const applyDialog = $("#applyTemplateDialog");
+  const templatePicker = $("#templateApplySource");
+  let templateAlertSource = null;
+  let templateAppearanceSource = null;
+  const templateGroups = () => [...applyDialog.querySelectorAll("input:checked")].map(input => input.value);
+
+  $("#timerApplyOpen").addEventListener("click", () => {
+    templatePicker.replaceChildren(...templates.map(template => new Option(template.name, template.id)));
+    applyDialog.querySelectorAll("input").forEach(input => { input.checked = input.defaultChecked; });
+    describeTemplateApply();
+    applyDialog.showModal();
+  });
+  function describeTemplateApply() {
+    const template = templates.find(item => item.id === templatePicker.value);
+    const groups = templateGroups();
+    const restricted = groups.includes("appearance") && template?.style === "pro" && !userCanUseProMode();
+    $("#templateApplySave").disabled = !template || !groups.length || restricted;
+    $("#templateApplySummary").textContent = restricted ? "This animation requires Beta Tester access or higher."
+      : "Timing fields stay as set in the editor. Save the timer to apply these changes.";
+  }
+  applyDialog.addEventListener("change", describeTemplateApply);
+  $("#templateApplySave").addEventListener("click", () => {
+    const template = templates.find(item => item.id === templatePicker.value);
+    if (!template) return;
+    const groups = templateGroups();
+    if (groups.includes("appearance")) {
+      templateAppearanceSource = template;
+      f.style.value = template.style || "bar";
+      f.color.value = template.color || "#6c7bff";
+      f.color2.value = template.color2 || f.color.value;
+      f.units.value = template.units || "auto";
+      f.format.value = resolveFormatForUnits(f.units.value, template.format);
+      f.ring_thickness.value = template.ring_thickness ?? 10;
+      f.ease.value = template.ease || "linear";
+      f.tick.value = template.tick ?? 100;
+      f.ms.value = template.ms || "off";
+      for (const key of ["mb_bars", "mb_ticks", "letters_n"]) f[key].value = template[key] ?? "";
+      f.style.dispatchEvent(new Event("change"));
+      f.units.dispatchEvent(new Event("change"));
+    }
+    if (groups.includes("alerts")) {
+      templateAlertSource = template;
+      renderTrList(template.triggers || []);
+      f.doneSound.value = "";
+      f.doneTts.value = template.doneTts || "";
+    }
+    if (groups.includes("fullscreen")) {
+      const custom = Array.isArray(template.fullscreenControls);
+      hasTimerFullscreenOverride = custom;
+      fillFullscreenControls($("#timerFullscreenControls"), effectiveFullscreenControls(template));
+    }
+    $("#timerTemplateStaged").textContent = `Loaded settings from ${template.name}. Save to apply them.`;
+    $("#timerTemplateStaged").hidden = false;
+    applyDialog.close();
   });
   registerServiceWorker();
   updateUIForLoginState();

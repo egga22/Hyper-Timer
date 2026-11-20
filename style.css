@@ -303,3 +303,8 @@ button.pill{background:transparent; cursor:pointer}
   #pairCards.pair-ring-and-bar .card[data-display-style="bar"]{width:66%}
 }
 .big .flip{font-variant-numeric:tabular-nums;min-inline-size:min(100%,9ch);overflow-wrap:anywhere}
+.template-apply-fields{border:1px solid #37394d;border-radius:12px;display:grid;gap:10px;padding:12px 15px;margin:0}
+.template-apply-fields legend{padding:0 6px;font-weight:650}.template-apply-fields label{display:flex;align-items:center;gap:8px;color:var(--text)}
+.template-apply-fields input{accent-color:var(--accent)}#templateTargets{max-height:30dvh;overflow:auto}
+
+#timerApplyOpen[hidden]{display:none}#timerTemplateStaged{color:#c9d0ff}
