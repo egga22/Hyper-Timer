@@ -390,9 +390,6 @@
       <button class="btn" value="cancel" aria-label="Close dialog">✕</button>
     </div>
     <div class="dialog-body settings-body">
-      <button type="button" class="fullscreen-settings-launch" id="settingsFullscreenOpen" aria-haspopup="dialog" aria-controls="fullscreenSettingsDialog">
-        <span><strong>Full screen</strong><span class="note">Set default layout, controls, and screen wake.</span></span><span aria-hidden="true">›</span>
-      </button>
       <div id="settingsSignedOut" class="settings-section">
         <div class="note">Sign in to sync timers and unlock experimental features.</div>
         <div class="settings-actions">
@@ -475,6 +472,15 @@
           <div class="note" id="accountSyncDetail"></div>
         </div>
       </div>
+      <section class="settings-section" aria-labelledby="settingsFullscreenLabel">
+        <div class="settings-summary">
+          <div class="settings-value" id="settingsFullscreenLabel">Full screen</div>
+          <div class="note">Set the default layout, controls, and screen wake behavior.</div>
+        </div>
+        <div class="settings-actions">
+          <button type="button" class="btn" id="settingsFullscreenOpen" aria-haspopup="dialog" aria-controls="fullscreenSettingsDialog">Full-screen options</button>
+        </div>
+      </section>
       <div class="settings-footer"><button type="button" class="settings-text-action" id="deletedOpen" aria-haspopup="dialog" hidden>Recently deleted</button></div>
     </div>
   </form>
