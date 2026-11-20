@@ -13,3 +13,9 @@ This repository has a user access system to allow production level changes to on
 | A brand new major feautre thats likely to have issues    | Owner & Beta Tester    | I as the owner needs to test it, and beta users will be excited to try new major features, even if it's not fully polised.    |
 | A brand new major feautre thats unlikely to have issues   | Owner, Beta Tester, Special Access   | Similar to the row above, although special Access users can try it sense it's unlikely to have issues. Standard users can't have access, as it's still brand new and experimental.   |
 | An adjustment to a recently added feature | The same access settings as the feature to adjust | Should be self-explanitory |
+
+## Timer editor layout
+
+- Put each group of per-timer options in its own native `<details>` section with a descriptive `<summary>`. Follow the same pattern as Advanced visuals, Triggers, Looping, and Full-screen options.
+- Keep the controls inside their section. Use the timer editor’s existing Save action to apply changes.
+- Timer button order is a separate section. Its Normal and Full screen controls belong inside it.

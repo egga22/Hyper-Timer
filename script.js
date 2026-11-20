@@ -3226,6 +3226,8 @@
     $("#fullscreenPlacement").value = validFullscreenPlacement(draft.fullscreenPlacement);
     $("#fullscreenText").value = validFullscreenText(draft.fullscreenText);
     previewFullscreenLayout();
+    $("#timerButtonOrderSection").open = false;
+    prepareButtonOrder(true);
     f.name.value = (editingTemplate ? template.name : draft.name)||""; f.mode.value=draft.mode||"duration"; f.style.value=draft.style||"bar"; f.color.value=draft.color||"#6c7bff";
     if (f.color2) f.color2.value = draft.color2 || draft.color || "#6c7bff";
     f.units.value = draft.units || "auto";
@@ -5347,34 +5349,39 @@
     const [key] = next.splice(from, 1);
     next.splice(to, 0, key);
     orderDraft[orderView] = next;
+    if (orderForTimer) draftTimerButtonOrder = orderDraft;
     showButtonOrder();
     orderList.children[to]?.querySelector("button")?.focus({ preventScroll: true });
   }
 
-  function openButtonOrder(forTimer) {
+  function prepareButtonOrder(forTimer) {
     orderForTimer = forTimer;
     orderView = "normal";
     orderDraft = sanitizeButtonOrders(forTimer ? draftTimerButtonOrder : userPreferences.buttonOrder);
-    $("#buttonOrderSave").textContent = forTimer ? "Use order" : "Save order";
+    const container = forTimer ? $("#timerButtonOrderContent") : $("#accountButtonOrderContent");
+    container.append($("#buttonOrderContent"));
     showButtonOrder();
-    orderDialog.showModal();
   }
-  $("#settingsButtonOrderOpen").addEventListener("click", () => openButtonOrder(false));
-  $("#timerButtonOrderOpen").addEventListener("click", () => openButtonOrder(true));
+  $("#settingsButtonOrderOpen").addEventListener("click", () => {
+    prepareButtonOrder(false);
+    orderDialog.showModal();
+  });
+  $("#timerButtonOrderSection").addEventListener("toggle", event => {
+    if (event.target.open && orderForTimer) showButtonOrder();
+  });
+  $("#timerFullscreenControls").addEventListener("change", () => {
+    if (orderForTimer && $("#timerButtonOrderSection").open) showButtonOrder();
+  });
   orderModeButtons.forEach(button => button.addEventListener("click", () => {
     orderView = button.dataset.orderMode;
     showButtonOrder();
   }));
   $("#buttonOrderReset").addEventListener("click", () => {
     delete orderDraft[orderView];
+    if (orderForTimer) draftTimerButtonOrder = orderDraft;
     showButtonOrder();
   });
   $("#buttonOrderSave").addEventListener("click", async () => {
-    if (orderForTimer) {
-      draftTimerButtonOrder = orderDraft;
-      orderDialog.close();
-      return;
-    }
     applyPreferencesToState({ ...userPreferences, buttonOrder: orderDraft });
     orderDialog.close();
     try { await pushPreferencesToCloud(); }

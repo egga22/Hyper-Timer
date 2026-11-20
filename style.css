@@ -322,3 +322,4 @@ button.pill{background:transparent; cursor:pointer}
 .button-order-handle{touch-action:none;cursor:grab;color:#cbd0ff;font-size:1.05rem;padding:.14rem .55rem;min-height:28px}
 .button-order-meta{display:flex;justify-content:space-between;align-items:center;gap:8px}
 .button-order-meta .btn:disabled{opacity:.45;cursor:default}
+#timerButtonOrderContent .dialog-body{padding:4px 0 0;max-width:480px}

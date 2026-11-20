@@ -336,9 +336,10 @@
 </div>
         <div class="fullscreen-settings-footnote">Exit Full Screen is always available.</div>
       </details>
-      <div class="settings-actions">
-        <button type="button" class="btn" id="timerButtonOrderOpen" aria-haspopup="dialog" aria-controls="buttonOrderDialog">Timer button order</button>
-      </div>
+      <details id="timerButtonOrderSection">
+        <summary>Timer button order</summary>
+        <div id="timerButtonOrderContent"></div>
+      </details>
       <div class="footer-row">
         <div class="note">Tip: long timers look great with Multi Bar. Save layouts as templates.</div>
         <div>
@@ -595,7 +596,8 @@
 
 <dialog class="fullscreen-controls-dialog button-order-dialog" id="buttonOrderDialog" aria-labelledby="buttonOrderDialogHeading">
   <div class="dialog-header"><h2 id="buttonOrderDialogHeading">Timer button order</h2><button class="btn" type="button" data-close-dialog="buttonOrderDialog" aria-label="Close">✕</button></div>
-  <div class="dialog-body">
+  <div id="accountButtonOrderContent">
+  <div class="dialog-body" id="buttonOrderContent">
     <div class="button-order-modes" role="group" aria-label="Timer view">
       <button type="button" class="btn" data-order-mode="normal">Normal</button>
       <button type="button" class="btn" data-order-mode="fullscreen">Full screen</button>
@@ -607,6 +609,7 @@
       <button type="button" class="btn" id="buttonOrderReset">Reset order</button>
     </div>
     </div>
+  </div>
   <div class="fullscreen-popup-footer"><button class="btn primary" type="button" id="buttonOrderSave">Save order</button></div>
 </dialog>
 
