@@ -42,6 +42,16 @@ body.has-fullscreen-fallback{overflow:hidden;}
 :is(.card:fullscreen, .card:-webkit-full-screen, .card.fullscreen-fallback) .canvaswrap{
   width:96vw !important; height:96vh; height:96dvh; flex-shrink:0; margin:0;
 }
+/* Keep the canvas' next-letter progress bar clear of the countdown. */
+:is(.card:fullscreen, .card:-webkit-full-screen, .card.fullscreen-fallback)[data-display-style="letters"]{
+  padding:52px 8px 8px; gap:4px;
+}
+:is(.card:fullscreen, .card:-webkit-full-screen, .card.fullscreen-fallback)[data-display-style="letters"] .canvaswrap{
+  height:auto; min-height:0; flex:1 1 0;
+}
+:is(.card:fullscreen, .card:-webkit-full-screen, .card.fullscreen-fallback)[data-display-style="letters"] .big{
+  position:static; max-width:100%; flex:0 0 auto; overflow-wrap:anywhere;
+}
 :is(.card:fullscreen, .card:-webkit-full-screen, .card.fullscreen-fallback)[data-display-style="ring"] .canvaswrap,
 :is(.card:fullscreen, .card:-webkit-full-screen, .card.fullscreen-fallback)[data-display-style="pie"] .canvaswrap{
   width:min(96vw,96vh) !important; height:min(96vw,96vh);

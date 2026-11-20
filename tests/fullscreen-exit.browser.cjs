@@ -73,6 +73,13 @@ const expose = `window.fullscreenTest = {
               const native = await page.evaluate(() => !!document.fullscreenElement || !!document.webkitFullscreenElement);
               const full = await geometry();
               assert.ok(full.width > before.width, 'animation expands in fullscreen');
+              if (await card.getAttribute('data-display-style') === 'letters') {
+                const bounds = await card.evaluate(el => ({
+                  canvasBottom: el.querySelector('canvas').getBoundingClientRect().bottom,
+                  countdownTop: el.querySelector('.big').getBoundingClientRect().top
+                }));
+                assert.ok(bounds.canvasBottom <= bounds.countdownTop, 'the countdown clears the next-letter progress bar');
+              }
               if (full.backingWidth) assert.ok(full.painted > 0, 'fullscreen canvas is painted');
               if (exit === 'button') await card.locator('[data-act="fullscreen"]').click();
               else if (!native) await page.keyboard.press('Escape');
