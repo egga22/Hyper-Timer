@@ -171,6 +171,7 @@
       fullscreenRedrawCards.forEach(target => {
         if (!target.isConnected) return;
         const timer = timers.find(t => String(t.id) === target.dataset.id);
+        if (timer) orderCardButtons(target, timer);
         const canvas = target.querySelector('canvas');
         if (!timer || !canvas) return;
         const style = target.dataset.displayStyle || timer.style;
@@ -1132,6 +1133,41 @@
     ["edit", "Edit"], ["delete", "Delete"]
   ];
 
+  const TIMER_BUTTON_LABELS = Object.fromEntries([
+    ...FULLSCREEN_CONTROLS, ["fullscreen", "Full screen"], ["pin", "Pin timer"]
+  ]);
+  const NORMAL_BUTTONS = ["pause", "fullscreen", "pin", "duplicate", "prestige", "tplsave", "edit", "delete"];
+  const FULLSCREEN_BUTTONS = NORMAL_BUTTONS.filter(key => key !== "pin");
+
+  function normalizeButtonOrder(value, mode) {
+    const allowed = mode === "fullscreen" ? FULLSCREEN_BUTTONS : NORMAL_BUTTONS;
+    const requested = Array.isArray(value) ? value.filter(key => allowed.includes(key)) : [];
+    return [...new Set([...requested, ...allowed])];
+  }
+
+  function sanitizeButtonOrders(orders) {
+    const result = {};
+    for (const mode of ["normal", "fullscreen"]) {
+      if (Array.isArray(orders?.[mode]) && orders[mode].length) result[mode] = normalizeButtonOrder(orders[mode], mode);
+    }
+    return result;
+  }
+
+  function orderCardButtons(card, timer) {
+    const actions = card.querySelector(".actions");
+    if (!actions) return;
+    const fullscreen = card === activeNativeFullscreenElement() || card === fallbackFullscreenCard;
+    const mode = fullscreen ? "fullscreen" : "normal";
+    const order = normalizeButtonOrder(timer.buttonOrder?.[mode] ?? userPreferences.buttonOrder?.[mode], mode);
+    const buttons = [...actions.children];
+    const sorted = order.flatMap(key => buttons.filter(button => button.dataset.act === key));
+    sorted.push(...buttons.filter(button => !order.includes(button.dataset.act)));
+    if (sorted.every((button, index) => button === buttons[index])) return;
+    const focused = document.activeElement;
+    actions.append(...sorted);
+    if (sorted.includes(focused)) focused.focus({ preventScroll: true });
+  }
+
   function sanitizeFullscreenControls(value) {
     return FULLSCREEN_CONTROLS.map(([key]) => key).filter(key => Array.isArray(value) && value.includes(key));
   }
@@ -1165,12 +1201,13 @@
     const container = $("#settingsFullscreenControls");
     fillFullscreenControls(container, sanitizeFullscreenControls(userPreferences.fullscreenControls));
     document.querySelectorAll(".card").forEach(card => {
-      const timer = timers.find(timer => timer.id === card.dataset.id);
+      const timer = timers.find(timer => String(timer.id) === card.dataset.id);
       if (!timer) return;
       const selected = effectiveFullscreenControls(timer);
       card.querySelectorAll(".actions [data-act]").forEach(button => {
         button.classList.toggle("fullscreen-visible", selected.includes(button.dataset.act));
       });
+      orderCardButtons(card, timer);
     });
   }
 
@@ -1191,6 +1228,7 @@
       defaultCustomFormat: sanitizeCustomFormat(base.defaultCustomFormat ?? base.customFormat),
       loopsEnabled,
       fullscreenControls: sanitizeFullscreenControls(base.fullscreenControls),
+      buttonOrder: sanitizeButtonOrders(base.buttonOrder),
       fullscreenPlacement: validFullscreenPlacement(base.fullscreenPlacement) || "default",
       fullscreenText: validFullscreenText(base.fullscreenText) || "standard",
       percentHoverEnabled,
@@ -2960,7 +2998,8 @@
     if (t.style === "pro") ensureProSplitState(t);
     const tpl = { id:uid("tpl_"), style:t.style, color:t.color, color2:t.color2, units:t.units, format: resolveFormatForUnits(t.units, t.format),
       ring_thickness:t.ring_thickness, ease:t.ease, tick:t.tick, ms:t.ms, dotsCount:t.dotsCount, mb_bars:t.mb_bars, mb_ticks:t.mb_ticks, letters_n:t.letters_n,
-      triggers:t.triggers, doneSoundDataUrl:t.doneSoundDataUrl, doneTts:t.doneTts, name: pickTemplateName(t) };
+      triggers:t.triggers, doneSoundDataUrl:t.doneSoundDataUrl, doneTts:t.doneTts, name: pickTemplateName(t),
+      buttonOrder: sanitizeButtonOrders(t.buttonOrder) };
     if (t.style === "pro"){
       tpl.splitStyles = [...(t.splitStyles||PRO_SPLIT_STYLES)];
       tpl.splitSettings = t.splitSettings ? JSON.parse(JSON.stringify(t.splitSettings)) : null;
@@ -2989,7 +3028,8 @@
         event.preventDefault();
         moveTemplate(tpl.id, index + offset);
       });
-      handle.addEventListener("pointerdown", event => beginTemplateDrag(event, handle, row));
+      handle.addEventListener("pointerdown", event => beginRowDrag(event, handle, row,
+        templateMenu, "[data-template-id]", to => moveTemplate(tpl.id, to)));
       row.prepend(handle);
       templateMenu.appendChild(row);
     });
@@ -3130,6 +3170,7 @@
   }
 
   let hasTimerFullscreenOverride = false;
+  let draftTimerButtonOrder = {};
 
   function readTimerFullscreenOverride() {
     return hasTimerFullscreenOverride ? readFullscreenControls($("#timerFullscreenControls")) : null;
@@ -3167,6 +3208,7 @@
       fullscreenPlacement: template?.fullscreenPlacement,
       fullscreenText: template?.fullscreenText,
       fullscreenControls: template?.fullscreenControls ?? null,
+      buttonOrder: template?.buttonOrder,
       units: draftUnits,
       format: template?.format || (draftUnits === "custom" ? getDefaultCustomFormat() : "{HH}:{mm}:{ss}"),
       ring_thickness: template?.ring_thickness ?? 10, ease: template?.ease || "linear", tick: template?.tick ?? 100, ms: template?.ms || "off",
@@ -3176,6 +3218,7 @@
     };
 
     hasTimerFullscreenOverride = Array.isArray(draft.fullscreenControls);
+    draftTimerButtonOrder = sanitizeButtonOrders(draft.buttonOrder);
     $("#timerFullscreenSection").open = false;
     fillFullscreenControls($("#timerFullscreenControls"), effectiveFullscreenControls(draft));
     $("#timerAwakeFullscreen").value = ["on","off"].includes(draft.awakeFullscreen) ? draft.awakeFullscreen : "";
@@ -3698,6 +3741,7 @@
       fullscreenPlacement: $("#fullscreenPlacement").value,
       fullscreenText: $("#fullscreenText").value,
       fullscreenControls: readTimerFullscreenOverride(),
+      buttonOrder: sanitizeButtonOrders(draftTimerButtonOrder),
       id: update && editorSourceTemplate.id ? editorSourceTemplate.id : uid("tpl_"), name: f.name.value.trim() || "Template", style: f.style.value, color: f.color.value,
       color2: f.color2.value || f.color.value,
       units: f.units.value,
@@ -3814,6 +3858,7 @@
       fullscreenPlacement: $("#fullscreenPlacement").value,
       fullscreenText: $("#fullscreenText").value,
       fullscreenControls: readTimerFullscreenOverride(),
+      buttonOrder: sanitizeButtonOrders(draftTimerButtonOrder),
       id: editId || uid("t_"), name: f.name.value.trim() || "Untitled", style: f.style.value, color: f.color.value,
       color2: f.color2.value || f.color.value,
       units: f.units.value,
@@ -4058,6 +4103,7 @@
       button.classList.toggle("fullscreen-visible", fullscreenControls.includes(button.dataset.act));
     });
     card.appendChild(actions);
+    orderCardButtons(card, t);
 
     const title = document.createElement("div");
     title.className="title";
@@ -5056,7 +5102,7 @@
     openTemplateMenu();
     [...templateMenu.children].find(row => row.dataset.templateId === id)?.querySelector(".template-drag")?.focus();
   }
-  function beginTemplateDrag(event, handle, row) {
+  function beginRowDrag(event, handle, row, list, selector, onDrop) {
     if (event.button || !event.isPrimary) return;
     const pointer = event.pointerId;
     handle.setPointerCapture(pointer);
@@ -5064,7 +5110,8 @@
     let target = null;
     const move = event => {
       target?.classList.remove("drop-target");
-      target = document.elementFromPoint(event.clientX, event.clientY)?.closest("[data-template-id]");
+      target = document.elementFromPoint(event.clientX, event.clientY)?.closest(selector);
+      if (target?.parentElement !== list) target = null;
       if (target && target !== row) target.classList.add("drop-target");
     };
     const finish = event => {
@@ -5074,7 +5121,7 @@
       handle.removeEventListener("pointerup", finish);
       handle.removeEventListener("pointercancel", finish);
       if (event.type === "pointerup" && target && target !== row) {
-        moveTemplate(row.dataset.templateId, [...templateMenu.children].indexOf(target));
+        onDrop([...list.children].indexOf(target));
       }
     };
     handle.addEventListener("pointermove", move);
@@ -5242,6 +5289,96 @@
     const stamp = new Date(target).toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
     smartDeadlineResult.textContent = current?.targetMs === target ? `Deadline unchanged · ${stamp}`
       : `Market deadline · ${stamp}. Save the timer to use it.`;
+  });
+  document.querySelectorAll('[data-close-dialog="buttonOrderDialog"]').forEach(button => {
+    button.addEventListener("click", () => $("#buttonOrderDialog").close());
+  });
+  const orderDialog = $("#buttonOrderDialog");
+  const orderList = $("#buttonOrderList");
+  const orderStatus = $("#buttonOrderStatus");
+  const orderModeButtons = $$("[data-order-mode]", orderDialog);
+  let orderView = "normal";
+  let orderForTimer = false;
+  let orderDraft = {};
+
+  function showButtonOrder() {
+    orderModeButtons.forEach(button => button.setAttribute("aria-pressed", button.dataset.orderMode === orderView));
+    const inherited = orderForTimer ? userPreferences.buttonOrder?.[orderView] : null;
+    const keys = normalizeButtonOrder(orderDraft[orderView] ?? inherited, orderView);
+    const visibleInFullscreen = orderForTimer
+      ? effectiveFullscreenControls({ fullscreenControls: readTimerFullscreenOverride() })
+      : userPreferences.fullscreenControls;
+    orderList.replaceChildren(...keys.map((key, index) => {
+      const row = document.createElement("li");
+      row.dataset.orderKey = key;
+      const label = TIMER_BUTTON_LABELS[key];
+      const name = Object.assign(document.createElement("span"), {
+        textContent: key === "fullscreen" && orderView === "fullscreen" ? "Exit full screen" : label
+      });
+      const handle = Object.assign(document.createElement("button"), {
+        type: "button", className: "btn button-order-handle", textContent: "⠿"
+      });
+      handle.setAttribute("aria-label", `Reorder ${name.textContent}`);
+      handle.setAttribute("aria-keyshortcuts", "ArrowUp ArrowDown");
+      handle.addEventListener("pointerdown", event => beginRowDrag(event, handle, row, orderList,
+        "[data-order-key]", to => moveButtonOrder(keys, index, to)));
+      handle.addEventListener("keydown", event => {
+        if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+        event.preventDefault();
+        moveButtonOrder(keys, index, index + (event.key === "ArrowUp" ? -1 : 1));
+      });
+      row.append(handle, name);
+      if (orderView === "fullscreen" && key !== "fullscreen" && !visibleInFullscreen?.includes(key)) {
+        const hidden = Object.assign(document.createElement("span"), { className: "note", textContent: "Hidden" });
+        row.append(hidden);
+      }
+      return row;
+    }));
+    orderStatus.textContent = orderForTimer
+      ? orderDraft[orderView] ? "Custom order for this timer" : "Using account order"
+      : orderDraft[orderView] ? "Custom default for this view" : "Using the built-in order";
+    $("#buttonOrderReset").disabled = !orderDraft[orderView];
+    $("#buttonOrderReset").textContent = orderForTimer ? "Use account order" : "Reset order";
+  }
+
+  function moveButtonOrder(keys, from, to) {
+    if (from === to || to < 0 || to >= keys.length) return;
+    const next = [...keys];
+    const [key] = next.splice(from, 1);
+    next.splice(to, 0, key);
+    orderDraft[orderView] = next;
+    showButtonOrder();
+    orderList.children[to]?.querySelector("button")?.focus({ preventScroll: true });
+  }
+
+  function openButtonOrder(forTimer) {
+    orderForTimer = forTimer;
+    orderView = "normal";
+    orderDraft = sanitizeButtonOrders(forTimer ? draftTimerButtonOrder : userPreferences.buttonOrder);
+    $("#buttonOrderSave").textContent = forTimer ? "Use order" : "Save order";
+    showButtonOrder();
+    orderDialog.showModal();
+  }
+  $("#settingsButtonOrderOpen").addEventListener("click", () => openButtonOrder(false));
+  $("#timerButtonOrderOpen").addEventListener("click", () => openButtonOrder(true));
+  orderModeButtons.forEach(button => button.addEventListener("click", () => {
+    orderView = button.dataset.orderMode;
+    showButtonOrder();
+  }));
+  $("#buttonOrderReset").addEventListener("click", () => {
+    delete orderDraft[orderView];
+    showButtonOrder();
+  });
+  $("#buttonOrderSave").addEventListener("click", async () => {
+    if (orderForTimer) {
+      draftTimerButtonOrder = orderDraft;
+      orderDialog.close();
+      return;
+    }
+    applyPreferencesToState({ ...userPreferences, buttonOrder: orderDraft });
+    orderDialog.close();
+    try { await pushPreferencesToCloud(); }
+    catch (error) { console.warn("Timer button order was saved on this device.", error); }
   });
   registerServiceWorker();
   updateUIForLoginState();

@@ -11,7 +11,7 @@ test('fullscreen changes redraw both sizes next frame and coalesce duplicate eve
   const card = { isConnected: true, dataset: { id: 'timer', displayStyle: 'letters' },
     querySelector: () => canvas };
   const document = { fullscreenElement: card, addEventListener: (name, fn) => { listeners[name] = fn; } };
-  const context = vm.createContext({ document, updateScreenAwake() {}, window: { addEventListener() {} },
+  const context = vm.createContext({ document, orderCardButtons() {}, updateScreenAwake() {}, window: { addEventListener() {} },
     requestAnimationFrame: fn => { frames.push(fn); return frames.length; },
     timers: [timer], drawVisual: (c, t) => draws.push({ c, t }) });
   const start = source.indexOf('  let fallbackFullscreenCard = null;');

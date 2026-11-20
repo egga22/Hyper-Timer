@@ -336,6 +336,9 @@
 </div>
         <div class="fullscreen-settings-footnote">Exit Full Screen is always available.</div>
       </details>
+      <div class="settings-actions">
+        <button type="button" class="btn" id="timerButtonOrderOpen" aria-haspopup="dialog" aria-controls="buttonOrderDialog">Timer button order</button>
+      </div>
       <div class="footer-row">
         <div class="note">Tip: long timers look great with Multi Bar. Save layouts as templates.</div>
         <div>
@@ -481,6 +484,15 @@
           <button type="button" class="btn" id="settingsFullscreenOpen" aria-haspopup="dialog" aria-controls="fullscreenSettingsDialog">Full-screen options</button>
         </div>
       </section>
+      <section class="settings-section" aria-labelledby="settingsButtonOrderLabel">
+        <div class="settings-summary">
+          <div class="settings-value" id="settingsButtonOrderLabel">Timer buttons</div>
+          <div class="note">Choose the button order for normal and full-screen timers.</div>
+        </div>
+        <div class="settings-actions">
+          <button type="button" class="btn" id="settingsButtonOrderOpen" aria-haspopup="dialog" aria-controls="buttonOrderDialog">Button order</button>
+        </div>
+      </section>
       <div class="settings-footer"><button type="button" class="settings-text-action" id="deletedOpen" aria-haspopup="dialog" hidden>Recently deleted</button></div>
     </div>
   </form>
@@ -579,6 +591,23 @@
     <div class="note" id="templateApplySummary" role="status"></div>
     </div>
   <div class="fullscreen-popup-footer"><button class="btn primary" type="button" id="templateApplySave" disabled>Load into editor</button></div>
+</dialog>
+
+<dialog class="fullscreen-controls-dialog button-order-dialog" id="buttonOrderDialog" aria-labelledby="buttonOrderDialogHeading">
+  <div class="dialog-header"><h2 id="buttonOrderDialogHeading">Timer button order</h2><button class="btn" type="button" data-close-dialog="buttonOrderDialog" aria-label="Close">✕</button></div>
+  <div class="dialog-body">
+    <div class="button-order-modes" role="group" aria-label="Timer view">
+      <button type="button" class="btn" data-order-mode="normal">Normal</button>
+      <button type="button" class="btn" data-order-mode="fullscreen">Full screen</button>
+    </div>
+    <p class="note button-order-note" id="buttonOrderHelp">Drag the handle or use its arrow keys. The list runs left to right.</p>
+    <ol id="buttonOrderList" aria-describedby="buttonOrderHelp"></ol>
+    <div class="button-order-meta">
+      <div class="note" id="buttonOrderStatus" role="status"></div>
+      <button type="button" class="btn" id="buttonOrderReset">Reset order</button>
+    </div>
+    </div>
+  <div class="fullscreen-popup-footer"><button class="btn primary" type="button" id="buttonOrderSave">Save order</button></div>
 </dialog>
 
 <script src="script.js" defer></script>

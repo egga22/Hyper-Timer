@@ -310,3 +310,15 @@ button.pill{background:transparent; cursor:pointer}
 
 #timerApplyOpen[hidden]{display:none}#timerTemplateStaged{color:#c9d0ff}
 #smartDeadlineTools{padding:11px 13px;background:#181b2a;border:1px solid #32364c;border-radius:12px;gap:7px}
+
+.button-order-dialog{width:min(440px,92vw)}
+.button-order-modes{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.button-order-modes .btn[aria-pressed="true"]{background:#272b52;border-color:#7079e9}
+.button-order-note{margin:0}
+#buttonOrderList{display:grid;gap:5px;list-style:none;margin:0;padding:0}
+#buttonOrderList li{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:4px 9px;background:#171925;border:1px solid #343649;border-radius:9px;font-size:.9rem}
+#buttonOrderList .dragging{opacity:.6}
+#buttonOrderList .drop-target{outline:2px solid var(--accent)}
+.button-order-handle{touch-action:none;cursor:grab;color:#cbd0ff;font-size:1.05rem;padding:.14rem .55rem;min-height:28px}
+.button-order-meta{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.button-order-meta .btn:disabled{opacity:.45;cursor:default}
