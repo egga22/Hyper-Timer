@@ -37,6 +37,7 @@ const expose = `window.fullscreenTest = {
     await page.locator('#settingsBtn').click();
     assert.equal(await page.locator('#buttonOrderList').isVisible(), false);
     await page.locator('#settingsButtonOrderOpen').click();
+    await page.locator('#buttonOrderList [value="pin"]').uncheck();
     await page.locator('[data-order-mode="fullscreen"]').click();
     const settings = page.locator('#buttonOrderList');
     assert.ok(await settings.isVisible());
@@ -65,15 +66,25 @@ const expose = `window.fullscreenTest = {
     await page.keyboard.press('Escape');
     await page.keyboard.press('Escape');
     await page.evaluate(() => fullscreenTest.set([{ id: 'test', name: 'Controls', mode: 'duration', style: 'bar', duration: 60000, total0: 60000, start: Date.now(), units: 'hms', color: '#6c7bff', triggers: [] }]));
+    assert.equal(await page.locator('[data-act="pin"]').isVisible(), false);
+    assert.ok(await page.locator('[data-act="edit"]').isVisible());
+    await page.evaluate(() => fullscreenTest.edit('test'));
+    await page.locator('#timerButtonOrderSection summary').click();
+    await page.locator('#buttonOrderList [value="pause"]').uncheck();
+    await page.locator('#saveBtn').click();
+    if (await page.locator('#saveAnimationDialog').isVisible()) await page.locator('#saveAnimationDialog [value="continue"]').click();
+    await page.locator('#editor').waitFor({ state: 'hidden' });
+    assert.equal(await page.locator('[data-act="pause"]').isVisible(), false);
     for (const fallback of [false, true]) {
       await page.evaluate(on => fullscreenTest.fallback(on), fallback);
       await page.locator('[data-act="fullscreen"]').click();
       await page.waitForFunction(() => document.fullscreenElement || document.webkitFullscreenElement || document.querySelector('.fullscreen-fallback'));
-      assert.ok(await page.locator('[data-act="pause"]').isVisible());
+      await page.locator('[data-act="pause"]').waitFor();
       assert.ok(await page.locator('[data-act="duplicate"]').isVisible());
       assert.equal(await page.locator('[data-act="delete"]').isVisible(), false);
       await page.locator('[data-act="fullscreen"]').click();
       await page.waitForFunction(() => !document.fullscreenElement && !document.webkitFullscreenElement && !document.querySelector('.fullscreen-fallback'));
+      await page.locator('[data-act="pause"]').waitFor({ state: 'hidden' });
     }
     const saveTimer = async () => {
       await page.locator('#saveBtn').click();

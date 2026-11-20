@@ -1153,6 +1153,10 @@
     return result;
   }
 
+  function sanitizeNormalControls(value) {
+    return Array.isArray(value) ? NORMAL_BUTTONS.filter(key => key === "edit" || value.includes(key)) : [...NORMAL_BUTTONS];
+  }
+
   function orderCardButtons(card, timer) {
     const actions = card.querySelector(".actions");
     if (!actions) return;
@@ -1160,6 +1164,10 @@
     const mode = fullscreen ? "fullscreen" : "normal";
     const order = normalizeButtonOrder(timer.buttonOrder?.[mode] ?? userPreferences.buttonOrder?.[mode], mode);
     const buttons = [...actions.children];
+    const normalControls = !fullscreen && sanitizeNormalControls(timer.normalControls ?? userPreferences.normalControls);
+    for (const button of buttons) {
+      button.classList.toggle("normal-hidden", !fullscreen && !normalControls.includes(button.dataset.act));
+    }
     const sorted = order.flatMap(key => buttons.filter(button => button.dataset.act === key));
     sorted.push(...buttons.filter(button => !order.includes(button.dataset.act)));
     if (sorted.every((button, index) => button === buttons[index])) return;
@@ -1207,6 +1215,7 @@
       loopsEnabled,
       fullscreenControls: sanitizeFullscreenControls(base.fullscreenControls),
       buttonOrder: sanitizeButtonOrders(base.buttonOrder),
+      normalControls: sanitizeNormalControls(base.normalControls),
       fullscreenPlacement: validFullscreenPlacement(base.fullscreenPlacement) || "default",
       fullscreenText: validFullscreenText(base.fullscreenText) || "standard",
       percentHoverEnabled,
@@ -2977,7 +2986,8 @@
     const tpl = { id:uid("tpl_"), style:t.style, color:t.color, color2:t.color2, units:t.units, format: resolveFormatForUnits(t.units, t.format),
       ring_thickness:t.ring_thickness, ease:t.ease, tick:t.tick, ms:t.ms, dotsCount:t.dotsCount, mb_bars:t.mb_bars, mb_ticks:t.mb_ticks, letters_n:t.letters_n,
       triggers:t.triggers, doneSoundDataUrl:t.doneSoundDataUrl, doneTts:t.doneTts, name: pickTemplateName(t),
-      buttonOrder: sanitizeButtonOrders(t.buttonOrder) };
+      buttonOrder: sanitizeButtonOrders(t.buttonOrder),
+      normalControls: Array.isArray(t.normalControls) ? sanitizeNormalControls(t.normalControls) : null };
     if (t.style === "pro"){
       tpl.splitStyles = [...(t.splitStyles||PRO_SPLIT_STYLES)];
       tpl.splitSettings = t.splitSettings ? JSON.parse(JSON.stringify(t.splitSettings)) : null;
@@ -3148,6 +3158,7 @@
   }
 
   let draftTimerFullscreenControls = null;
+  let draftTimerNormalControls = null;
   let draftTimerButtonOrder = {};
 
   function readTimerFullscreenOverride() {
@@ -3187,6 +3198,7 @@
       fullscreenText: template?.fullscreenText,
       fullscreenControls: template?.fullscreenControls ?? null,
       buttonOrder: template?.buttonOrder,
+      normalControls: template?.normalControls,
       units: draftUnits,
       format: template?.format || (draftUnits === "custom" ? getDefaultCustomFormat() : "{HH}:{mm}:{ss}"),
       ring_thickness: template?.ring_thickness ?? 10, ease: template?.ease || "linear", tick: template?.tick ?? 100, ms: template?.ms || "off",
@@ -3197,6 +3209,7 @@
 
     draftTimerFullscreenControls = Array.isArray(draft.fullscreenControls) ? sanitizeFullscreenControls(draft.fullscreenControls) : null;
     draftTimerButtonOrder = sanitizeButtonOrders(draft.buttonOrder);
+    draftTimerNormalControls = Array.isArray(draft.normalControls) ? sanitizeNormalControls(draft.normalControls) : null;
     $("#timerFullscreenSection").open = false;
     $("#timerAwakeFullscreen").value = ["on","off"].includes(draft.awakeFullscreen) ? draft.awakeFullscreen : "";
     $("#timerAwakeBoard").checked = draft.awakeBoard === true;
@@ -3721,6 +3734,7 @@
       fullscreenText: $("#fullscreenText").value,
       fullscreenControls: readTimerFullscreenOverride(),
       buttonOrder: sanitizeButtonOrders(draftTimerButtonOrder),
+      normalControls: draftTimerNormalControls,
       id: update && editorSourceTemplate.id ? editorSourceTemplate.id : uid("tpl_"), name: f.name.value.trim() || "Template", style: f.style.value, color: f.color.value,
       color2: f.color2.value || f.color.value,
       units: f.units.value,
@@ -3838,6 +3852,7 @@
       fullscreenText: $("#fullscreenText").value,
       fullscreenControls: readTimerFullscreenOverride(),
       buttonOrder: sanitizeButtonOrders(draftTimerButtonOrder),
+      normalControls: draftTimerNormalControls,
       id: editId || uid("t_"), name: f.name.value.trim() || "Untitled", style: f.style.value, color: f.color.value,
       color2: f.color2.value || f.color.value,
       units: f.units.value,
@@ -5218,7 +5233,7 @@
     }
     if (groups.includes("fullscreen")) {
       draftTimerFullscreenControls = Array.isArray(template.fullscreenControls) ? sanitizeFullscreenControls(template.fullscreenControls) : null;
-      orderVisibilityDraft = draftTimerFullscreenControls;
+      orderVisibilityDraft.fullscreen = draftTimerFullscreenControls;
       if ($("#timerButtonOrderSection").open) showButtonOrder();
     }
     $("#timerTemplateStaged").textContent = `Loaded settings from ${template.name}. Save to apply them.`;
@@ -5270,16 +5285,16 @@
   let orderView = "normal";
   let orderForTimer = false;
   let orderDraft = {};
-  let orderVisibilityDraft = null;
+  let orderVisibilityDraft = {};
 
   function showButtonOrder() {
     orderModeButtons.forEach(button => button.setAttribute("aria-pressed", button.dataset.orderMode === orderView));
     const inherited = orderForTimer ? userPreferences.buttonOrder?.[orderView] : null;
     const keys = normalizeButtonOrder(orderDraft[orderView] ?? inherited, orderView);
-    const visibleInFullscreen = orderVisibilityDraft ?? userPreferences.fullscreenControls;
-    $("#buttonOrderHelp").textContent = orderView === "fullscreen"
-      ? "Drag to set the order left to right. Check Show to display a button in full screen."
-      : "Drag the handles or use their arrow keys. The list runs left to right.";
+    const fullscreen = orderView === "fullscreen";
+    const visible = orderVisibilityDraft[orderView] ?? (fullscreen
+      ? userPreferences.fullscreenControls : sanitizeNormalControls(userPreferences.normalControls));
+    const alwaysVisible = fullscreen ? "fullscreen" : "edit";
     orderList.replaceChildren(...keys.map((key, index) => {
       const row = document.createElement("li");
       row.dataset.orderKey = key;
@@ -5300,26 +5315,24 @@
         moveButtonOrder(keys, index, index + (event.key === "ArrowUp" ? -1 : 1));
       });
       row.append(handle, name);
-      if (orderView === "fullscreen") {
-        if (key === "fullscreen") {
-          row.append(Object.assign(document.createElement("span"), { className: "note", textContent: "Always shown" }));
-        } else {
-          const visibility = document.createElement("label");
-          visibility.className = "button-order-visibility";
-          const checkbox = Object.assign(document.createElement("input"), {
-            type: "checkbox", value: key, checked: visibleInFullscreen?.includes(key) ?? false
-          });
-          checkbox.setAttribute("aria-label", `Show ${name.textContent} in full screen`);
-          visibility.append(checkbox, "Show");
-          row.append(visibility);
-        }
+      if (key === alwaysVisible) {
+        row.append(Object.assign(document.createElement("span"), { className: "note", textContent: "Always shown" }));
+      } else {
+        const visibility = document.createElement("label");
+        visibility.className = "button-order-visibility";
+        const checkbox = Object.assign(document.createElement("input"), {
+          type: "checkbox", value: key, checked: visible?.includes(key) ?? false
+        });
+        checkbox.setAttribute("aria-label", `Show ${name.textContent}${fullscreen ? " in full screen" : " on the board"}`);
+        visibility.append(checkbox, "Show");
+        row.append(visibility);
       }
       return row;
     }));
     orderStatus.textContent = orderForTimer
       ? orderDraft[orderView] ? "Custom order for this timer" : "Using account order"
       : orderDraft[orderView] ? "Custom default for this view" : "Using the built-in order";
-    $("#buttonVisibilityReset").hidden = !orderForTimer || orderView !== "fullscreen" || orderVisibilityDraft === null;
+    $("#buttonVisibilityReset").hidden = !orderForTimer || orderVisibilityDraft[orderView] === null;
     $("#buttonOrderReset").disabled = !orderDraft[orderView];
     $("#buttonOrderReset").textContent = orderForTimer ? "Use account order" : "Reset order";
   }
@@ -5339,7 +5352,9 @@
     orderForTimer = forTimer;
     orderView = "normal";
     orderDraft = sanitizeButtonOrders(forTimer ? draftTimerButtonOrder : userPreferences.buttonOrder);
-    orderVisibilityDraft = forTimer ? draftTimerFullscreenControls : sanitizeFullscreenControls(userPreferences.fullscreenControls);
+    orderVisibilityDraft = forTimer
+      ? { normal: draftTimerNormalControls, fullscreen: draftTimerFullscreenControls }
+      : { normal: sanitizeNormalControls(userPreferences.normalControls), fullscreen: sanitizeFullscreenControls(userPreferences.fullscreenControls) };
     const container = forTimer ? $("#timerButtonOrderContent") : $("#accountButtonOrderContent");
     container.append($("#buttonOrderContent"));
     showButtonOrder();
@@ -5351,16 +5366,19 @@
   $("#timerButtonOrderSection").addEventListener("toggle", event => {
     if (event.target.open && orderForTimer) showButtonOrder();
   });
+  function setButtonVisibility(visibility) {
+    orderVisibilityDraft[orderView] = visibility;
+    if (!orderForTimer) return;
+    if (orderView === "fullscreen") draftTimerFullscreenControls = visibility;
+    else draftTimerNormalControls = visibility;
+    $("#buttonVisibilityReset").hidden = visibility === null;
+  }
   orderList.addEventListener("change", () => {
-    orderVisibilityDraft = sanitizeFullscreenControls($$("input:checked", orderList).map(input => input.value));
-    if (orderForTimer) {
-      draftTimerFullscreenControls = orderVisibilityDraft;
-      $("#buttonVisibilityReset").hidden = false;
-    }
+    const checked = $$("input:checked", orderList).map(input => input.value);
+    setButtonVisibility(orderView === "fullscreen" ? sanitizeFullscreenControls(checked) : sanitizeNormalControls(checked));
   });
   $("#buttonVisibilityReset").addEventListener("click", () => {
-    orderVisibilityDraft = null;
-    draftTimerFullscreenControls = null;
+    setButtonVisibility(null);
     showButtonOrder();
   });
   orderModeButtons.forEach(button => button.addEventListener("click", () => {
@@ -5373,7 +5391,8 @@
     showButtonOrder();
   });
   $("#buttonOrderSave").addEventListener("click", async () => {
-    applyPreferencesToState({ ...userPreferences, buttonOrder: orderDraft, fullscreenControls: orderVisibilityDraft });
+    applyPreferencesToState({ ...userPreferences, buttonOrder: orderDraft,
+      normalControls: orderVisibilityDraft.normal, fullscreenControls: orderVisibilityDraft.fullscreen });
     orderDialog.close();
     try { await pushPreferencesToCloud(); }
     catch (error) { console.warn("Timer button order was saved on this device.", error); }

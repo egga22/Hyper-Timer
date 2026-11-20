@@ -320,3 +320,4 @@ button.pill{background:transparent; cursor:pointer}
 .button-order-visibility{display:flex;align-items:center;gap:7px;font-size:.8rem;cursor:pointer}
 .button-order-visibility input{accent-color:var(--accent);margin:0}
 .button-order-resets{display:flex;justify-content:flex-end;gap:6px;flex-wrap:wrap}
+.action-btn.normal-hidden{display:none}

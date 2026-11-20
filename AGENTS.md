@@ -18,4 +18,4 @@ This repository has a user access system to allow production level changes to on
 
 - Put each group of per-timer options in its own native `<details>` section with a descriptive `<summary>`. Follow the same pattern as Advanced visuals, Triggers, Looping, and Full-screen options.
 - Keep the controls inside their section. Use the timer editor’s existing Save action to apply changes.
-- Timer button order is a separate section. Keep both views inside it. In the Full screen view, put show/hide checkboxes beside the reorder handles.
+- Timer button order is a separate section. Keep both views inside it, with show/hide checkboxes beside the reorder handles.
