@@ -35,9 +35,10 @@ const expose = `window.fullscreenTest = {
     await page.goto('https://hypertimer.test');
     await page.waitForFunction(() => !!window.fullscreenTest);
     await page.locator('#settingsBtn').click();
-    assert.equal(await page.locator('#settingsFullscreenControls').isVisible(), false);
-    await page.locator('#settingsFullscreenOpen').click();
-    const settings = page.locator('#settingsFullscreenControls');
+    assert.equal(await page.locator('#buttonOrderList').isVisible(), false);
+    await page.locator('#settingsButtonOrderOpen').click();
+    await page.locator('[data-order-mode="fullscreen"]').click();
+    const settings = page.locator('#buttonOrderList');
     assert.ok(await settings.isVisible());
     for (const width of [1280, 390]) {
       await page.setViewportSize({ width, height: 844 });
@@ -50,12 +51,16 @@ const expose = `window.fullscreenTest = {
     await page.setViewportSize({ width: 1280, height: 800 });
     await settings.locator('[value="pause"]').check();
     await settings.locator('[value="duplicate"]').check();
-    await page.keyboard.press('Escape');
+    await settings.locator('[data-order-key="duplicate"] button').press('ArrowUp');
+    await settings.locator('[data-order-key="duplicate"] button').press('ArrowUp');
+    await page.locator('#buttonOrderSave').click();
     assert.ok(await page.locator('#settingsDialog').isVisible());
     await page.keyboard.press('Escape');
     await page.reload();
     await page.locator('#settingsBtn').click();
-    await page.locator('#settingsFullscreenOpen').click();
+    await page.locator('#settingsButtonOrderOpen').click();
+    await page.locator('[data-order-mode="fullscreen"]').click();
+    assert.equal(await settings.locator('li').first().getAttribute('data-order-key'), 'duplicate');
     assert.ok(await settings.locator('[value="pause"]').isChecked());
     await page.keyboard.press('Escape');
     await page.keyboard.press('Escape');
@@ -77,15 +82,16 @@ const expose = `window.fullscreenTest = {
     };
     const editFullscreen = async () => {
       await page.evaluate(() => fullscreenTest.edit('test'));
-      await page.locator('#timerFullscreenSection summary').click();
+      await page.locator('#timerButtonOrderSection summary').click();
+      await page.locator('[data-order-mode="fullscreen"]').click();
     };
     await editFullscreen();
-    assert.ok(await page.locator('#timerFullscreenControls [value="pause"]').isChecked());
+    assert.ok(await page.locator('#buttonOrderList [value="pause"]').isChecked());
     await saveTimer();
     assert.equal(await page.evaluate(() => fullscreenTest.read()[0].fullscreenControls ?? null), null);
     await editFullscreen();
-    await page.locator('#timerFullscreenControls [value="pause"]').uncheck();
-    await page.locator('#timerFullscreenControls [value="duplicate"]').uncheck();
+    await page.locator('#buttonOrderList [value="pause"]').uncheck();
+    await page.locator('#buttonOrderList [value="duplicate"]').uncheck();
     await saveTimer();
     assert.deepEqual(await page.evaluate(() => fullscreenTest.read()[0].fullscreenControls), []);
     await page.reload();
@@ -96,6 +102,13 @@ const expose = `window.fullscreenTest = {
     await page.locator('.fullscreen-fallback').waitFor();
     assert.equal(await page.locator('[data-act="pause"]').isVisible(), false);
     assert.ok(await page.locator('[data-act="fullscreen"]').isVisible());
+    await page.locator('[data-act="fullscreen"]').click();
+    await page.locator('.fullscreen-fallback').waitFor({ state: 'hidden' });
+    await editFullscreen();
+    await page.locator('#buttonVisibilityReset').click();
+    assert.ok(await page.locator('#buttonOrderList [value="pause"]').isChecked());
+    await saveTimer();
+    assert.equal(await page.evaluate(() => fullscreenTest.read()[0].fullscreenControls), null);
     assert.deepEqual(errors, []);
     console.log('PASS settings persistence, native/fallback visibility, and saved per-timer override');
   } finally { await browser.close(); }

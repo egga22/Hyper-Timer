@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const source = fs.readFileSync(require('node:path').join(__dirname, '../script.js'), 'utf8');
 const context = vm.createContext({ userPreferences: { fullscreenControls: ['pause', 'duplicate'] } });
-vm.runInContext(source.slice(source.indexOf('  const FULLSCREEN_CONTROLS ='), source.indexOf('  function fillFullscreenControls(')), context);
+vm.runInContext(source.slice(source.indexOf('  const FULLSCREEN_CONTROLS ='), source.indexOf('  function refreshFullscreenControls(')), context);
 const controls = timer => Array.from(context.effectiveFullscreenControls(timer));
 test('older timers inherit defaults while empty overrides hide every optional control', () => {
   assert.deepEqual(controls({}), ['pause', 'duplicate']);

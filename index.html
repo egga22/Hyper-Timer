@@ -323,7 +323,6 @@
       </details>
       <details id="timerFullscreenSection">
         <summary>Full-screen options</summary>
-        <div id="timerFullscreenControls" class="fullscreen-control-grid"></div>
         <section class="fullscreen-category-section"><h3>Keep screen awake</h3><label for="timerAwakeFullscreen">While this timer is in full screen</label>
               <select id="timerAwakeFullscreen"><option value="">Use device default</option><option value="on">Keep screen awake</option><option value="off">Allow screen to sleep</option></select>
               <label class="toggle"><input id="timerAwakeBoard" class="toggle-input" type="checkbox"><span>On the board while this timer is running</span></label></section>
@@ -334,7 +333,6 @@
     </div>
     <div id="layoutPreview" class="layout-preview" aria-hidden="true"><div class="layout-sample">08:42</div><div class="layout-track"><i></i></div></div>
 </div>
-        <div class="fullscreen-settings-footnote">Exit Full Screen is always available.</div>
       </details>
       <details id="timerButtonOrderSection">
         <summary>Timer button order</summary>
@@ -479,7 +477,7 @@
       <section class="settings-section" aria-labelledby="settingsFullscreenLabel">
         <div class="settings-summary">
           <div class="settings-value" id="settingsFullscreenLabel">Full screen</div>
-          <div class="note">Set the default layout, controls, and screen wake behavior.</div>
+          <div class="note">Set the default layout and screen wake behavior.</div>
         </div>
         <div class="settings-actions">
           <button type="button" class="btn" id="settingsFullscreenOpen" aria-haspopup="dialog" aria-controls="fullscreenSettingsDialog">Full-screen options</button>
@@ -488,10 +486,10 @@
       <section class="settings-section" aria-labelledby="settingsButtonOrderLabel">
         <div class="settings-summary">
           <div class="settings-value" id="settingsButtonOrderLabel">Timer buttons</div>
-          <div class="note">Choose the button order for normal and full-screen timers.</div>
+          <div class="note">Reorder timer buttons and choose which ones appear in full screen.</div>
         </div>
         <div class="settings-actions">
-          <button type="button" class="btn" id="settingsButtonOrderOpen" aria-haspopup="dialog" aria-controls="buttonOrderDialog">Button order</button>
+          <button type="button" class="btn" id="settingsButtonOrderOpen" aria-haspopup="dialog" aria-controls="buttonOrderDialog">Timer button order</button>
         </div>
       </section>
       <div class="settings-footer"><button type="button" class="settings-text-action" id="deletedOpen" aria-haspopup="dialog" hidden>Recently deleted</button></div>
@@ -529,10 +527,9 @@
   <div class="dialog-header"><h2 id="fullscreenSettingsHeading">Full screen</h2><button type="button" class="btn" data-close-fullscreen="fullscreenSettingsDialog" aria-label="Close full-screen controls">✕</button></div>
       <section class="fullscreen-settings fullscreen-popup-content">
         <div class="fullscreen-settings-heading">
-          <div><p>Keep your timer focused. Show only the buttons you need.</p></div>
+          <div><p>Choose the default layout and screen wake behavior.</p></div>
           <span class="fullscreen-settings-badge">Default for all timers</span>
         </div>
-        <div id="settingsFullscreenControls" class="fullscreen-control-grid"></div>
         <section class="fullscreen-category-section"><h3>Keep screen awake</h3><label class="toggle"><input id="awakeBoard" class="toggle-input" type="checkbox"><span>On the timer board</span></label>
                  <label class="toggle"><input id="awakeFullscreen" class="toggle-input" type="checkbox"><span>In full screen by default</span></label>
                  <div class="note" id="awakeStatus" role="status">Saved on this device.</div></section>
@@ -543,7 +540,7 @@
     </div>
     <div id="globalLayoutPreview" class="layout-preview" aria-hidden="true"><div class="layout-sample">08:42</div><div class="layout-track"><i></i></div></div>
 </div>
-        <div class="fullscreen-settings-footnote"><span>Exit Full Screen is always available.</span><span>Saved automatically · Customize any timer in its editor.</span></div>
+        <div class="fullscreen-settings-footnote"><span>Saved automatically · Customize any timer in its editor.</span></div>
       </section>
   <div class="fullscreen-popup-footer"><button type="button" class="btn primary" data-close-fullscreen="fullscreenSettingsDialog">Done</button></div>
 </dialog>
@@ -606,11 +603,14 @@
     <ol id="buttonOrderList" aria-describedby="buttonOrderHelp"></ol>
     <div class="button-order-meta">
       <div class="note" id="buttonOrderStatus" role="status"></div>
-      <button type="button" class="btn" id="buttonOrderReset">Reset order</button>
+      <div class="button-order-resets">
+        <button type="button" class="btn" id="buttonVisibilityReset" hidden>Use account visibility</button>
+        <button type="button" class="btn" id="buttonOrderReset">Reset order</button>
+      </div>
     </div>
     </div>
   </div>
-  <div class="fullscreen-popup-footer"><button class="btn primary" type="button" id="buttonOrderSave">Save order</button></div>
+  <div class="fullscreen-popup-footer"><button class="btn primary" type="button" id="buttonOrderSave">Save changes</button></div>
 </dialog>
 
 <script src="script.js" defer></script>
