@@ -1,4 +1,4 @@
-// Run with Playwright installed: node tests/fullscreen-exit.browser.cjs
+// Run with Playwright installed: node tests/fullscreen-controls.browser.cjs
 // Optional: BROWSER_ENGINE=webkit, BROWSER_EXECUTABLE=/path/to/browser
 const { chromium, webkit } = require('playwright');
 const assert = require('node:assert/strict');
@@ -63,26 +63,37 @@ const expose = `window.fullscreenTest = {
     for (const fallback of [false, true]) {
       await page.evaluate(on => fullscreenTest.fallback(on), fallback);
       await page.locator('[data-act="fullscreen"]').click();
+      await page.waitForFunction(() => document.fullscreenElement || document.webkitFullscreenElement || document.querySelector('.fullscreen-fallback'));
       assert.ok(await page.locator('[data-act="pause"]').isVisible());
       assert.ok(await page.locator('[data-act="duplicate"]').isVisible());
       assert.equal(await page.locator('[data-act="delete"]').isVisible(), false);
       await page.locator('[data-act="fullscreen"]').click();
+      await page.waitForFunction(() => !document.fullscreenElement && !document.webkitFullscreenElement && !document.querySelector('.fullscreen-fallback'));
     }
-    await page.evaluate(() => fullscreenTest.edit('test'));
-    await page.locator('#timerFullscreenOpen').click();
-    await page.locator('#f_fullscreenOverride').selectOption('custom');
+    const saveTimer = async () => {
+      await page.locator('#saveBtn').click();
+      if (await page.locator('#saveAnimationDialog').isVisible()) await page.locator('#saveAnimationDialog [value="continue"]').click();
+      await page.waitForFunction(() => !document.querySelector('#editor').open);
+    };
+    const editFullscreen = async () => {
+      await page.evaluate(() => fullscreenTest.edit('test'));
+      await page.locator('#timerFullscreenSection summary').click();
+    };
+    await editFullscreen();
+    assert.ok(await page.locator('#timerFullscreenControls [value="pause"]').isChecked());
+    await saveTimer();
+    assert.equal(await page.evaluate(() => fullscreenTest.read()[0].fullscreenControls ?? null), null);
+    await editFullscreen();
     await page.locator('#timerFullscreenControls [value="pause"]').uncheck();
     await page.locator('#timerFullscreenControls [value="duplicate"]').uncheck();
-    await page.locator('#timerFullscreenDialog .primary').click();
-    await page.locator('#saveBtn').click();
-    if (await page.locator('#saveAnimationDialog').isVisible()) await page.locator('#saveAnimationDialog [value="continue"]').click();
-    await page.waitForFunction(() => !document.querySelector('#editor').open);
+    await saveTimer();
     assert.deepEqual(await page.evaluate(() => fullscreenTest.read()[0].fullscreenControls), []);
     await page.reload();
     await page.waitForFunction(() => !!window.fullscreenTest);
     assert.deepEqual(await page.evaluate(() => fullscreenTest.read()[0].fullscreenControls), []);
     await page.evaluate(() => fullscreenTest.fallback(true));
     await page.locator('[data-act="fullscreen"]').click();
+    await page.locator('.fullscreen-fallback').waitFor();
     assert.equal(await page.locator('[data-act="pause"]').isVisible(), false);
     assert.ok(await page.locator('[data-act="fullscreen"]').isVisible());
     assert.deepEqual(errors, []);

@@ -120,9 +120,11 @@
           </select>
         </div>
       </div>
-      <button type="button" class="fullscreen-settings-launch" id="timerFullscreenOpen" aria-haspopup="dialog" aria-controls="timerFullscreenDialog">
-        <span><strong>Full-screen controls</strong><span class="note">Choose the controls for this timer.</span></span><span aria-hidden="true">›</span>
-      </button>
+      <details id="timerFullscreenSection">
+        <summary>Full-screen options</summary>
+        <div id="timerFullscreenControls" class="fullscreen-control-grid"></div>
+        <p class="note">Exit Full Screen is always available.</p>
+      </details>
       <div id="color2Field" class="field invisible">
         <label>Secondary color</label>
         <input id="f_color2" type="color" value="#ff6c7b">
@@ -471,22 +473,6 @@
       </div>
     </div>
   </form>
-</dialog>
-
-<dialog id="timerFullscreenDialog" class="fullscreen-controls-dialog" aria-labelledby="timerFullscreenHeading">
-  <div class="dialog-header"><h2 id="timerFullscreenHeading">Full-screen controls</h2><button type="button" class="btn" data-close-fullscreen="timerFullscreenDialog" aria-label="Close full-screen controls">✕</button></div>
-      <section class="fullscreen-settings fullscreen-popup-content">
-        <div class="fullscreen-settings-heading">
-          <div><p>Choose the buttons available while this timer fills the screen.</p></div>
-          <select id="f_fullscreenOverride" aria-label="Full-screen control settings">
-            <option value="default">Use default</option>
-            <option value="custom">Customize</option>
-          </select>
-        </div>
-        <div id="timerFullscreenControls" class="fullscreen-control-grid"></div>
-        <div class="fullscreen-settings-footnote">Exit Full Screen is always available.</div>
-      </section>
-  <div class="fullscreen-popup-footer"><button type="button" class="btn primary" data-close-fullscreen="timerFullscreenDialog">Done</button></div>
 </dialog>
 
 <dialog id="fullscreenSettingsDialog" class="fullscreen-controls-dialog" aria-labelledby="fullscreenSettingsHeading">
