@@ -494,6 +494,8 @@
   let timers = [];
   let templates = [];
   let editId = null;
+  let editorSourceTemplate = null;
+  let editingTemplate = false;
 
 
   const KEY_TIMERS = "hyperTimer_v6_timers";
@@ -2948,36 +2950,30 @@
 
   function openTemplateMenu(){
     templateMenu.innerHTML="";
-    const add=document.createElement("div"); add.className="template-item"; add.innerHTML="<strong>＋ New Template</strong>";
-    add.tabIndex = 0;
-    add.setAttribute("role", "button");
-    add.addEventListener("keydown", event => {
-      if (event.key === "Enter" || event.key === " ") {
-        event.preventDefault();
-        add.click();
-      }
-    });
-    add.addEventListener("click", ()=>{ templateMenu.classList.remove("open"); if (tplBtn) tplBtn.setAttribute("aria-expanded", "false"); openEditor(null, {style:'bar', color:'#6c7bff', color2:'#6c7bff', units:'auto'}); });
-    templateMenu.appendChild(add);
-    templates.forEach(tpl=>{
+    if (!templates.length) templateMenu.textContent = "No templates yet.";
+    templates.forEach((tpl, index)=>{
       const row=document.createElement("div"); row.className="template-item";
       const meta=`<div class='note'>${escapeHtml(tpl.style)} • ${escapeHtml(tpl.units)} • ${(tpl.triggers?.length||0)} trig</div>`;
-      row.innerHTML=`<div style='display:flex;justify-content:space-between;gap:8px;align-items:center'><div>${escapeHtml(tpl.name)}</div><div><button class='btn' data-act='use'>Use</button> <button class='btn' data-act='rename'>Rename</button> <button class='btn' data-act='edit'>Edit</button> <button class='btn' data-act='del'>Delete</button></div></div>${meta}`;
-      row.querySelector("[data-act='use']").addEventListener("click", (e)=>{ e.stopPropagation(); templateMenu.classList.remove("open"); if (tplBtn) tplBtn.setAttribute("aria-expanded", "false"); openEditor(null, tpl); });
-      row.querySelector("[data-act='edit']").addEventListener("click", (e)=>{ e.stopPropagation(); templateMenu.classList.remove("open"); if (tplBtn) tplBtn.setAttribute("aria-expanded", "false"); openEditor(null, tpl); $("#dialogTitle").textContent = "Edit Template"; });
-      row.querySelector("[data-act='rename']").addEventListener("click", (e)=>{
-        e.stopPropagation();
-        const name = prompt("Template name", tpl.name);
-        if (name === null) return;
-        if (!name.trim()) { alert("Enter a template name."); return; }
-        tpl.name = name.trim();
-        saveTemplates();
-        openTemplateMenu();
-      });
+      row.innerHTML=`<div style='display:flex;justify-content:space-between;gap:8px;align-items:center'><div>${escapeHtml(tpl.name)}</div><div><button class='btn' data-act='use'>Use</button> <button class='btn' data-act='edit'>Edit</button> <button class='btn' data-act='del'>Delete</button></div></div>${meta}`;
+      row.querySelector("[data-act='use']").addEventListener("click", (e)=>{ e.stopPropagation(); openEditor(null, tpl); });
+      row.querySelector("[data-act='edit']").addEventListener("click", (e)=>{ e.stopPropagation(); openEditor(null, tpl, true); $("#dialogTitle").textContent = "Edit Template"; });
       row.querySelector("[data-act='del']").addEventListener("click", (e)=>{ e.stopPropagation(); if(confirm("Delete template '"+tpl.name+"'?")){ templates = templates.filter(x=>x.id!==tpl.id); saveTemplates(); openTemplateMenu(); } });
+      row.dataset.templateId = tpl.id;
+      const handle = Object.assign(document.createElement("button"), { type: "button",
+        className: "btn template-drag", textContent: "⠿" });
+      handle.setAttribute("aria-label", `Reorder ${tpl.name}. Drag or use up and down arrow keys.`);
+      handle.title = "Drag to reorder";
+      handle.addEventListener("keydown", event => {
+        const offset = event.key === "ArrowUp" ? -1 : event.key === "ArrowDown" ? 1 : 0;
+        if (!offset) return;
+        event.preventDefault();
+        moveTemplate(tpl.id, index + offset);
+      });
+      handle.addEventListener("pointerdown", event => beginTemplateDrag(event, handle, row));
+      row.prepend(handle);
       templateMenu.appendChild(row);
     });
-    templateMenu.classList.add("open");
+    if (!$("#templateLibrary").open) $("#templateLibrary").showModal();
     if (tplBtn) tplBtn.setAttribute("aria-expanded", "true");
   }
 
@@ -3041,12 +3037,12 @@
   function renderTrList(entries){ $("#trList").innerHTML=""; (entries||[]).forEach(e=> $("#trList").appendChild(trRow(e))); }
   function collectTrEntries(existingMap){
     const rows = $$(".tr-row", $("#trList"));
-    const promises = rows.map(row => new Promise(async (resolve)=>{
+    const promises = rows.map(row => new Promise((resolve, reject)=>{
       const id=row.dataset.id; const type=row.querySelector(".tr-type").value; const rawVal=row.querySelector(".tr-value").value.trim();
       const action=row.querySelector(".tr-action").value; const ttsTemplate=row.querySelector(".tr-tts").value; const fileInput=row.querySelector(".tr-sound");
       let soundDataUrl = existingMap.get(id)?.soundDataUrl || null;
       if (fileInput.files && fileInput.files[0]){
-        const r=new FileReader(); r.onload=()=> resolve(pack(r.result)); r.readAsDataURL(fileInput.files[0]);
+        const r=new FileReader(); r.onload=()=> resolve(pack(r.result)); r.onerror=reject; r.readAsDataURL(fileInput.files[0]);
       } else resolve(pack(soundDataUrl));
       function pack(dataUrl){ return { id, type, valuePercent:type==="percent"?parseFloat(rawVal):null, valueTime:type==="time"?parseTimeStr(rawVal):null, valueTimeStr:type==="time"?rawVal:null, intervalSec:type==="interval"?Math.max(1,Math.floor(parseFloat(rawVal)||0)):null, action, ttsTemplate, soundDataUrl:dataUrl, align:"elapsed" }; }
     }));
@@ -3119,7 +3115,19 @@
     return hasTimerFullscreenOverride ? readFullscreenControls($("#timerFullscreenControls")) : null;
   }
 
-  function openEditor(id=null, template=null){
+  function openEditor(id=null, template=null, editTemplate=false){
+    editorSourceTemplate = template || templates.find(item => item.id === timers.find(timer => timer.id === id)?.sourceTemplateId);
+    editingTemplate = editTemplate;
+    editor.classList.toggle("editing-template", editTemplate);
+    f.doneSound.value = "";
+    $("#editorNameLabel").textContent = editTemplate ? "Template name" : "Name";
+    $("#saveTplBtn").hidden = editTemplate;
+    $("#saveTplCopy").hidden = !editTemplate;
+    $("#saveBtn").textContent = editTemplate ? "Update template" : "Save";
+    const templateStatus = $("#templateEditorStatus");
+    templateStatus.hidden = !editorSourceTemplate;
+    templateStatus.textContent = editTemplate ? "Changes here apply to this template. Timers you already created keep their setup." : editorSourceTemplate ? `Template · ${editorSourceTemplate.name}` : "";
+
     $("#dialogTitle").textContent = id ? "Edit Timer" : (template ? "New from Template" : "New Timer");
     editId = id;
     const draftStyle = template?.style || getDefaultTimerStyle();
@@ -3148,7 +3156,7 @@
     $("#fullscreenPlacement").value = validFullscreenPlacement(draft.fullscreenPlacement);
     $("#fullscreenText").value = validFullscreenText(draft.fullscreenText);
     previewFullscreenLayout();
-    f.name.value = draft.name||""; f.mode.value=draft.mode||"duration"; f.style.value=draft.style||"bar"; f.color.value=draft.color||"#6c7bff";
+    f.name.value = (editingTemplate ? template.name : draft.name)||""; f.mode.value=draft.mode||"duration"; f.style.value=draft.style||"bar"; f.color.value=draft.color||"#6c7bff";
     if (f.color2) f.color2.value = draft.color2 || draft.color || "#6c7bff";
     f.units.value = draft.units || "auto";
     if (f.units.value === "custom") {
@@ -3643,15 +3651,26 @@
   }
   // --- END: Authentication and Sync Functions ---
 
-  $("#saveTplBtn").addEventListener("click", async ()=>{
-    const triggers = await collectTrEntries(new Map());
+  async function saveEditorTemplate(update = false) {
+    const existingTimer = timers.find(timer => timer.id === editId);
+    const source = editingTemplate ? editorSourceTemplate : existingTimer || editorSourceTemplate;
+    const triggers = await collectTrEntries(new Map((source?.triggers || []).map(trigger => [trigger.id, trigger])));
+    let sound = source?.doneSoundDataUrl || null;
+    if (f.doneSound.files[0]) {
+      sound = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(f.doneSound.files[0]);
+      });
+    }
     const tpl = {
-      id: uid("tpl_"), name: f.name.value.trim() || "Template", style: f.style.value, color: f.color.value,
       awakeFullscreen: $("#timerAwakeFullscreen").value,
       awakeBoard: $("#timerAwakeBoard").checked,
       fullscreenPlacement: $("#fullscreenPlacement").value,
       fullscreenText: $("#fullscreenText").value,
       fullscreenControls: readTimerFullscreenOverride(),
+      id: update && editorSourceTemplate.id ? editorSourceTemplate.id : uid("tpl_"), name: f.name.value.trim() || "Template", style: f.style.value, color: f.color.value,
       color2: f.color2.value || f.color.value,
       units: f.units.value,
       format: resolveFormatForUnits(f.units.value, f.format.value),
@@ -3660,7 +3679,7 @@
       mb_bars: f.mb_bars.value? Math.max(2, Math.min(5, +f.mb_bars.value)) : null,
       letters_n: (f.letters_n && f.letters_n.value) ? Math.max(1, Math.min(7, +f.letters_n.value)) : null,
       mb_ticks: f.mb_ticks.value? Math.max(8, Math.min(40, +f.mb_ticks.value)) : null,
-      triggers, doneSoundDataUrl:null, doneTts: f.doneTts.value||""
+      triggers, doneSoundDataUrl:sound, doneTts: f.doneTts.value||""
     };
     if (tpl.style === "pro" && !userCanUseProMode()) {
       toggleProAccessNotice(true);
@@ -3668,11 +3687,33 @@
       return;
     }
     if (tpl.style === "pro"){
-      tpl.splitStyles = [...PRO_SPLIT_STYLES];
-      tpl.splitSettings = null;
+      tpl.splitStyles = structuredClone(source?.splitStyles || PRO_SPLIT_STYLES);
+      tpl.splitSettings = source?.splitSettings ? structuredClone(source.splitSettings) : null;
     }
-    tpl.name = pickTemplateName(tpl);
-    templates.push(tpl); saveTemplates(); alert("Saved template: "+tpl.name);
+    if (update && editorSourceTemplate.id) templates = templates.map(item => item.id === tpl.id ? { ...item, ...tpl } : item);
+    else {
+      if (!update && editingTemplate && tpl.name === editorSourceTemplate.name) tpl.name += " copy";
+      else if (!f.name.value.trim()) tpl.name = pickTemplateName(tpl);
+      templates.push(tpl);
+    }
+    saveTemplates();
+    if (editingTemplate) {
+      editor.close();
+      openTemplateMenu();
+    } else alert("Saved template: " + tpl.name);
+  }
+  let templateSaving = false;
+  async function runTemplateSave(update) {
+    if (templateSaving) return;
+    templateSaving = true;
+    try { await saveEditorTemplate(update); }
+    catch (error) { alert("Could not save the template. Check the sound file and browser storage."); }
+    finally { templateSaving = false; }
+  }
+  $("#saveTplBtn").addEventListener("click", () => runTemplateSave(false));
+  $("#saveTplCopy").addEventListener("click", event => {
+    event.stopPropagation();
+    runTemplateSave(false);
   });
 
   async function chooseSaveAnimationBehavior() {
@@ -3707,7 +3748,13 @@
   let timerSaveInProgress = false;
   $("#saveBtn").addEventListener("click", async (e)=>{
     e.preventDefault();
-    if (timerSaveInProgress) return;
+    if (timerSaveInProgress || templateSaving) return;
+    if (editingTemplate) {
+      e.stopPropagation();
+      $("#saveBtn").disabled = true;
+      try { await runTemplateSave(true); } finally { $("#saveBtn").disabled = false; }
+      return;
+    }
     timerSaveInProgress = true;
     $("#saveBtn").disabled = true;
     try {
@@ -3750,10 +3797,10 @@
       alert("Pro Mode is limited to Beta Tester or higher accounts.");
       return;
     }
-    const existingMap = new Map((existing?.triggers||[]).map(e=>[e.id,e]));
+    const existingMap = new Map(((existing || editorSourceTemplate)?.triggers||[]).map(e=>[e.id,e]));
     const triggers = await collectTrEntries(existingMap);
 
-    let doneSoundDataUrl = existing?.doneSoundDataUrl || null;
+    let doneSoundDataUrl = (existing || editorSourceTemplate)?.doneSoundDataUrl || null;
     if (f.doneSound.files && f.doneSound.files[0]){
       const dataUrl = await new Promise(res=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.readAsDataURL(f.doneSound.files[0]); });
       doneSoundDataUrl = dataUrl;
@@ -3826,6 +3873,7 @@
         total0: tot, mb_plan: plan, triggers, doneSoundDataUrl, doneTts: f.doneTts.value || "",
         prestigeLevel: existing?.prestigeLevel || 0 };
     }
+    if (editorSourceTemplate?.id) record.sourceTemplateId = editorSourceTemplate.id;
     record.completed = false;
     record.paused = false;
     record.pausedAt = null;
@@ -4703,7 +4751,14 @@
     if (settingsBtn) settingsBtn.setAttribute('aria-expanded', 'false');
   });
   tplBtn.addEventListener("click", ()=> openTemplateMenu());
-  document.addEventListener("click", (e)=>{ if(!templateMenu.contains(e.target) && e.target!==tplBtn){ templateMenu.classList.remove("open"); if (tplBtn) tplBtn.setAttribute("aria-expanded", "false"); } });
+  $("#templateClose").addEventListener("click", () => $("#templateLibrary").close());
+  $("#templateLibrary").addEventListener("close", () => tplBtn.setAttribute("aria-expanded", "false"));
+  $("#templateNew").addEventListener("click", () => {
+    openEditor(null, { style: "bar", color: "#6c7bff", units: "auto" }, true);
+    $("#dialogTitle").textContent = "New Template";
+    $("#saveBtn").textContent = "Save template";
+    $("#saveTplCopy").hidden = true;
+  });
   $("#authModeSwitch").addEventListener('click', (e) => {
     e.preventDefault();
     const isSignUp = $("#authTitle").textContent === "Log In";
@@ -4914,6 +4969,42 @@
     if (!document.hidden && !screenLock && !requestingScreenLock) requestedScreenAwake = false;
     updateScreenAwake();
   });
+  function moveTemplate(id, to) {
+    const from = templates.findIndex(template => template.id === id);
+    if (from < 0 || to < 0 || to >= templates.length || from === to) return;
+    const next = [...templates];
+    const [item] = next.splice(from, 1);
+    next.splice(to, 0, item);
+    localStorage.setItem(TPL, JSON.stringify(next));
+    templates = next;
+    openTemplateMenu();
+    [...templateMenu.children].find(row => row.dataset.templateId === id)?.querySelector(".template-drag")?.focus();
+  }
+  function beginTemplateDrag(event, handle, row) {
+    if (event.button || !event.isPrimary) return;
+    const pointer = event.pointerId;
+    handle.setPointerCapture(pointer);
+    row.classList.add("dragging");
+    let target = null;
+    const move = event => {
+      target?.classList.remove("drop-target");
+      target = document.elementFromPoint(event.clientX, event.clientY)?.closest("[data-template-id]");
+      if (target && target !== row) target.classList.add("drop-target");
+    };
+    const finish = event => {
+      row.classList.remove("dragging");
+      target?.classList.remove("drop-target");
+      handle.removeEventListener("pointermove", move);
+      handle.removeEventListener("pointerup", finish);
+      handle.removeEventListener("pointercancel", finish);
+      if (event.type === "pointerup" && target && target !== row) {
+        moveTemplate(row.dataset.templateId, [...templateMenu.children].indexOf(target));
+      }
+    };
+    handle.addEventListener("pointermove", move);
+    handle.addEventListener("pointerup", finish);
+    handle.addEventListener("pointercancel", finish);
+  }
   registerServiceWorker();
   updateUIForLoginState();
   load();

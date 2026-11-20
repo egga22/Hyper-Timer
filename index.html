@@ -22,7 +22,7 @@
       <button class="btn" id="exportBtn">Export</button>
       <button class="btn" id="importBtn" type="button">Import</button>
       <input id="importInput" type="file" accept=".json,application/json" hidden>
-      <button class="btn" id="tplBtn" aria-haspopup="menu" aria-expanded="false">Templates ▾</button>
+      <button class="btn" id="tplBtn" aria-haspopup="dialog" aria-controls="templateLibrary" aria-expanded="false">Templates ▾</button>
       <button class="btn primary" id="addBtn">New</button>
     </div>
   </div>
@@ -30,7 +30,10 @@
 
 <main class="grid" id="grid"></main>
 <button class="fab" id="fab" aria-label="Add timer">＋</button>
-<div class="template-menu" id="templateMenu" role="region" aria-label="Timer templates"></div>
+<dialog class="template-library" id="templateLibrary" aria-labelledby="templateHeading">
+  <header class="template-library-header"><h2 id="templateHeading">Templates</h2><div class="controls"><button type="button" class="btn primary" id="templateNew">New template</button><button type="button" class="btn" id="templateClose">Close</button></div></header>
+  <div id="templateMenu" class="template-library-grid"></div>
+</dialog>
 
 <dialog id="editor" aria-labelledby="dialogTitle">
   <form method="dialog" novalidate>
@@ -38,16 +41,18 @@
       <div class="title" id="dialogTitle">New Timer</div>
       <div style="display:flex; gap:8px; align-items:center;">
         <button class="btn" id="saveTplBtn" type="button">Save as Template</button>
+        <button class="btn" id="saveTplCopy" type="button" hidden>Save a copy</button>
         <button class="btn" value="cancel" aria-label="Close dialog">✕</button>
       </div>
     </div>
     <div class="dialog-body">
+      <div class="note" id="templateEditorStatus" role="status" hidden></div>
       <div class="field">
-        <label for="f_name">Name</label>
+        <label for="f_name" id="editorNameLabel">Name</label>
         <input id="f_name" type="text" placeholder="e.g., Pizza, Exam, Birthday">
       </div>
       <div class="field-row">
-        <div class="field">
+        <div class="field template-schedule-field">
           <label for="f_mode">Mode</label>
           <select id="f_mode">
             <option value="duration">Duration</option>
