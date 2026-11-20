@@ -1977,10 +1977,10 @@
       f.loopDatetimeFields.classList.add("invisible");
     }
     if (f.loopAlignRow) {
-      const hideAlign = f.loopUnit && f.loopUnit.value === "shortterm";
-      f.loopAlignRow.classList.toggle("invisible", !(toggleChecked && mode === "datetime") || hideAlign);
+      f.loopAlignRow.classList.toggle("invisible", !(toggleChecked && mode === "datetime"));
     }
     updateLoopingUnitFields();
+    updateLoopStartFields();
   }
 
   function updateLoopingSectionVisibility() {
@@ -2588,10 +2588,30 @@
     return nowTs;
   }
 
+  function shortTermCustomStartSelected() {
+    return isLoopsFeatureEnabled() && userCanAccessShortTermSchedule()
+      && f.mode.value === "datetime" && f.loopEnabled.checked
+      && f.loopUnit.value === "shortterm" && f.loopStartBehavior.value === "custom";
+  }
+
+  function invalidShortTermStart(config, reference) {
+    for (const event of config.events) {
+      const occurrences = event.type === "weekly"
+        ? event.weekdays.map(day => nextOccurrenceForEvent({ ...event, weekdays: [day] }, reference))
+        : [nextOccurrenceForEvent(event, reference)];
+      if (occurrences.some(end => Number.isFinite(end)
+        && loopStartTimestamp(config, end, 0, 0, reference) >= end)) return event;
+    }
+    return null;
+  }
+
   function updateLoopStartFields() {
     const customOption = f.loopStartBehavior.querySelector('option[value="custom"]');
     customOption.disabled = !userCanAccessShortTermSchedule();
     $("#loopCustomStartFields").classList.toggle("invisible", f.loopStartBehavior.value !== "custom");
+    const calendarStartControlsHidden = f.mode.value === "duration" || shortTermCustomStartSelected();
+    $("#startOverrideRow").classList.toggle("invisible", calendarStartControlsHidden);
+    $("#startPctRow").classList.toggle("invisible", calendarStartControlsHidden);
   }
 
   function handleLoopRestart(t, total){
@@ -3750,6 +3770,7 @@
     $("#saveBtn").disabled = true;
     try {
     const existing = editId ? timers.find(x=>x.id===editId) : null;
+    if (shortTermCustomStartSelected()) ensureShortTermTarget();
     const loopReferenceMs = f.mode.value === "datetime"
       ? (f.when && f.when.value ? parseLocalDateTime(f.when.value) : existing?.targetMs ?? null)
       : (existing?.mode === "datetime" ? existing.targetMs : null);
@@ -3757,14 +3778,19 @@
     if (loopConfig.enabled && loopConfig.startBehavior === "custom") {
       if (!userCanAccessShortTermSchedule()) { alert("Custom loop starts require an Owner or Beta Tester account."); return; }
       if (!f.loopStartTime.value) { alert("Choose a default loop start time."); return; }
-      // Check every weekday, including dates with overrides, against the target clock time.
-      const target = new Date(loopReferenceMs);
-      const targetMinutes = target.getHours() * 60 + target.getMinutes();
-      if (loopConfig.startDayOffset === 0 && loopConfig.startWeekdays.concat(loopConfig.startTime).filter(Boolean).some(time => {
-        const [hour, minute] = time.split(":").map(Number);
-        return hour * 60 + minute >= targetMinutes;
-      })) { alert("Each same-day start time must be before the end time. Choose Previous day for an overnight timer."); return; }
+      if (loopConfig.unit === "shortterm") {
+        const invalid = invalidShortTermStart(loopConfig, now());
+        if (invalid) { alert(`The start time for “${invalid.label}” must be before its end. Choose Previous day for an overnight timer.`); return; }
+      } else {
+        const target = new Date(loopReferenceMs);
+        const targetMinutes = target.getHours() * 60 + target.getMinutes();
+        if (loopConfig.startDayOffset === 0 && loopConfig.startWeekdays.concat(loopConfig.startTime).filter(Boolean).some(time => {
+          const [hour, minute] = time.split(":").map(Number);
+          return hour * 60 + minute >= targetMinutes;
+        })) { alert("Each same-day start time must be before the end time. Choose Previous day for an overnight timer."); return; }
+      }
     }
+    const useScheduleStart = loopConfig.enabled && loopConfig.unit === "shortterm" && loopConfig.startBehavior === "custom";
     const base = {
       fullscreenControls: readTimerFullscreenOverride(),
       id: editId || uid("t_"), name: f.name.value.trim() || "Untitled", style: f.style.value, color: f.color.value,
@@ -3838,7 +3864,13 @@
       let startOverrideMs = null;
       let startOverridePct = null;
       let startMs = nowTs;
-      if (f.startWhen.value) {
+      if (useScheduleStart) {
+        startMs = loopStartTimestamp(loopConfig, targetMs, 0, 0, nowTs);
+        if (!Number.isFinite(startMs) || startMs >= targetMs) {
+          alert("The scheduled start must be before the end.");
+          return;
+        }
+      } else if (f.startWhen.value) {
         const parsedStart = parseLocalDateTime(f.startWhen.value);
         if (parsedStart === null) { alert("Invalid start date & time"); return; }
         startOverrideMs = parsedStart;
@@ -3865,7 +3897,7 @@
     record.pausedAt = null;
     record.leftWhenPaused = null;
     record._prevRem = remainingMs(record);
-    const needsSaveChoice = existing &&
+    const needsSaveChoice = existing && !useScheduleStart &&
       (record.mode === "duration" || (!f.startWhen.value && !f.startPct.value.trim()));
     if (needsSaveChoice) {
       const behavior = await chooseSaveAnimationBehavior();

@@ -27,3 +27,24 @@ test('other dropdown choices preserve their distinct meaning', () => {
   assert.equal(calculate({startBehavior:'previousEnd'}, 10000, 2000, 3000, 4000), 2000);
   assert.equal(calculate({startBehavior:'sameDuration'}, 10000, 2000, 3000, 4000), 7000);
 });
+
+test('short-term validation checks each weekday against its own event end', () => {
+  const start = source.indexOf('  function invalidShortTermStart(');
+  const end = source.indexOf('  function updateLoopStartFields(', start);
+  context.nextOccurrenceForEvent = event => event.type === 'weekly'
+    ? event.ends[event.weekdays[0]]
+    : event.timestamp;
+  vm.runInContext(source.slice(start, end), context);
+
+  const weekly = {
+    type: 'weekly',
+    label: 'School',
+    weekdays: [2, 3],
+    ends: { 2: ts('2026-11-10T15:00:00'), 3: ts('2026-11-11T09:00:00') }
+  };
+  const single = { type: 'single', timestamp: ts('2026-11-12T14:00:00') };
+  assert.equal(context.invalidShortTermStart({ ...config, events: [single, weekly] }, 0), weekly);
+  assert.equal(context.invalidShortTermStart({
+    ...config, startDayOffset: -1, events: [single, weekly]
+  }, 0), null);
+});
