@@ -186,6 +186,7 @@
     scheduleFullscreenRedraw(active);
     previousNativeFullscreenCard = active;
     if (!active) requestAnimationFrame(returnToBoard);
+    updateScreenAwake();
   }
   document.addEventListener('fullscreenchange', handleNativeFullscreenChange);
   document.addEventListener('webkitfullscreenchange', handleNativeFullscreenChange);
@@ -248,6 +249,7 @@
     // Remove body class if no fallback fullscreen cards remain
     if (!document.querySelector(".card.fullscreen-fallback")){
       document.body.classList.remove("has-fullscreen-fallback");
+      updateScreenAwake();
     }
   }
 
@@ -280,6 +282,7 @@
     card.classList.add("fullscreen-fallback");
     if (card.dataset) card.dataset.fullscreenFallback = "1";
     document.body.classList.add("has-fullscreen-fallback");
+    updateScreenAwake();
     scheduleFullscreenRedraw(card);
   }
 
@@ -1186,6 +1189,8 @@
       defaultCustomFormat: sanitizeCustomFormat(base.defaultCustomFormat ?? base.customFormat),
       loopsEnabled,
       fullscreenControls: sanitizeFullscreenControls(base.fullscreenControls),
+      fullscreenPlacement: validFullscreenPlacement(base.fullscreenPlacement) || "default",
+      fullscreenText: validFullscreenText(base.fullscreenText) || "standard",
       percentHoverEnabled,
       saveAnimationBehavior: ["ask", "reset", "continue"].includes(base.saveAnimationBehavior) ? base.saveAnimationBehavior : "ask"
     };
@@ -3122,6 +3127,10 @@
     const draft = id ? timers.find(x=>x.id===id) : {
       id: uid("t_"), name:"", mode:"duration", style: draftStyle, color: template?.color || "#6c7bff",
       color2: template?.color2 || template?.color || "#6c7bff",
+      awakeFullscreen: template?.awakeFullscreen,
+      awakeBoard: template?.awakeBoard,
+      fullscreenPlacement: template?.fullscreenPlacement,
+      fullscreenText: template?.fullscreenText,
       fullscreenControls: template?.fullscreenControls ?? null,
       units: draftUnits,
       format: template?.format || (draftUnits === "custom" ? getDefaultCustomFormat() : "{HH}:{mm}:{ss}"),
@@ -3134,6 +3143,11 @@
     hasTimerFullscreenOverride = Array.isArray(draft.fullscreenControls);
     $("#timerFullscreenSection").open = false;
     fillFullscreenControls($("#timerFullscreenControls"), effectiveFullscreenControls(draft));
+    $("#timerAwakeFullscreen").value = ["on","off"].includes(draft.awakeFullscreen) ? draft.awakeFullscreen : "";
+    $("#timerAwakeBoard").checked = draft.awakeBoard === true;
+    $("#fullscreenPlacement").value = validFullscreenPlacement(draft.fullscreenPlacement);
+    $("#fullscreenText").value = validFullscreenText(draft.fullscreenText);
+    previewFullscreenLayout();
     f.name.value = draft.name||""; f.mode.value=draft.mode||"duration"; f.style.value=draft.style||"bar"; f.color.value=draft.color||"#6c7bff";
     if (f.color2) f.color2.value = draft.color2 || draft.color || "#6c7bff";
     f.units.value = draft.units || "auto";
@@ -3633,6 +3647,10 @@
     const triggers = await collectTrEntries(new Map());
     const tpl = {
       id: uid("tpl_"), name: f.name.value.trim() || "Template", style: f.style.value, color: f.color.value,
+      awakeFullscreen: $("#timerAwakeFullscreen").value,
+      awakeBoard: $("#timerAwakeBoard").checked,
+      fullscreenPlacement: $("#fullscreenPlacement").value,
+      fullscreenText: $("#fullscreenText").value,
       fullscreenControls: readTimerFullscreenOverride(),
       color2: f.color2.value || f.color.value,
       units: f.units.value,
@@ -3710,6 +3728,10 @@
       })) { alert("Each same-day start time must be before the end time. Choose Previous day for an overnight timer."); return; }
     }
     const base = {
+      awakeFullscreen: $("#timerAwakeFullscreen").value,
+      awakeBoard: $("#timerAwakeBoard").checked,
+      fullscreenPlacement: $("#fullscreenPlacement").value,
+      fullscreenText: $("#fullscreenText").value,
       fullscreenControls: readTimerFullscreenOverride(),
       id: editId || uid("t_"), name: f.name.value.trim() || "Untitled", style: f.style.value, color: f.color.value,
       color2: f.color2.value || f.color.value,
@@ -3928,6 +3950,8 @@
     card.className = "card";
     card.dataset.id = t.id;
     card.dataset.displayStyle = displayStyle;
+    card.dataset.placement = validFullscreenPlacement(t.fullscreenPlacement) || userPreferences.fullscreenPlacement || "default";
+    card.dataset.fullscreenText = validFullscreenText(t.fullscreenText) || userPreferences.fullscreenText || "standard";
     if (splitStyle) card.dataset.proPart = splitStyle;
 
     const actions = document.createElement("div");
@@ -4560,6 +4584,7 @@
       }
       t._prevRem = timerLoopsEnabled(t) ? remainingMs(t) : rem;
     });
+    updateScreenAwake();
     const minTick = timers.length ? Math.min(...timers.map(t=> +t.tick || 100), 100) : 100;
     setTimeout(()=> requestAnimationFrame(tick), clamp(minTick, 16, 250));
   }
@@ -4581,6 +4606,9 @@
   
   $("#settingsFullscreenOpen").addEventListener("click", () => {
     refreshFullscreenControls();
+    $("#globalFullscreenPlacement").value = userPreferences.fullscreenPlacement || "default";
+    $("#globalFullscreenText").value = userPreferences.fullscreenText || "standard";
+    previewFullscreenLayout();
     $("#fullscreenSettingsDialog").showModal();
   });
   document.querySelectorAll("[data-close-fullscreen]").forEach(button => {
@@ -4801,6 +4829,91 @@
     $("#deletedDialog").showModal();
   });
   editor.addEventListener("close", returnToBoard);
+  function validFullscreenPlacement(value) {
+    return ["default", "above", "below", "overlay"].includes(value) ? value : "";
+  }
+  function validFullscreenText(value) {
+    return ["standard", "large", "extra"].includes(value) ? value : "";
+  }
+  function previewFullscreenLayout() {
+    $("#layoutPreview").dataset.placement = $("#fullscreenPlacement").value || userPreferences.fullscreenPlacement;
+    $("#layoutPreview").dataset.text = $("#fullscreenText").value || userPreferences.fullscreenText;
+    $("#globalLayoutPreview").dataset.placement = $("#globalFullscreenPlacement").value;
+    $("#globalLayoutPreview").dataset.text = $("#globalFullscreenText").value;
+  }
+  for (const control of [$("#globalFullscreenPlacement"), $("#globalFullscreenText")]) {
+    control.addEventListener("change", async () => {
+      applyPreferencesToState({ ...userPreferences, fullscreenPlacement: $("#globalFullscreenPlacement").value,
+        fullscreenText: $("#globalFullscreenText").value });
+      previewFullscreenLayout();
+      render();
+      try { await pushPreferencesToCloud(); }
+      catch (error) { console.warn("Full-screen layout was saved on this device.", error); }
+    });
+  }
+  $("#fullscreenPlacement").addEventListener("change", previewFullscreenLayout);
+  $("#fullscreenText").addEventListener("change", previewFullscreenLayout);
+  const awakeBoard = $("#awakeBoard");
+  const awakeFullscreen = $("#awakeFullscreen");
+  const awakeStatus = $("#awakeStatus");
+  awakeBoard.checked = localStorage.getItem("hyperTimer_awakeBoard") === "on";
+  awakeFullscreen.checked = localStorage.getItem("hyperTimer_awakeFullscreen") === "on";
+  let screenLock = null;
+  let requestingScreenLock = false;
+  let requestedScreenAwake = false;
+  function wantsScreenAwake() {
+    if (document.hidden) return false;
+    const card = activeNativeFullscreenElement() || fallbackFullscreenCard;
+    if (card) {
+      const timer = timers.find(item => String(item.id) === card.dataset.id);
+      return timer?.awakeFullscreen ? timer.awakeFullscreen === "on" : awakeFullscreen.checked;
+    }
+    return awakeBoard.checked || timers.some(timer => timer.awakeBoard && !timer.paused && remainingMs(timer) > 0);
+  }
+  async function updateScreenAwake() {
+    if (!navigator.wakeLock) return;
+    const wanted = wantsScreenAwake();
+    if (wanted === requestedScreenAwake) return;
+    requestedScreenAwake = wanted;
+    if (!wanted) {
+      const previous = screenLock;
+      screenLock = null;
+      try { await previous?.release(); } catch (error) { console.warn("Screen wake lock release failed", error); }
+      awakeStatus.textContent = "Saved on this device.";
+      return;
+    }
+    if (requestingScreenLock || screenLock) return;
+    requestingScreenLock = true;
+    try {
+      const lock = await navigator.wakeLock.request("screen");
+      if (!wantsScreenAwake()) {
+        await lock.release();
+        return;
+      }
+      screenLock = lock;
+      awakeStatus.textContent = "Keeping the screen awake.";
+      lock.addEventListener("release", () => {
+        if (screenLock === lock) {
+          screenLock = null;
+          awakeStatus.textContent = "The browser released the screen wake lock.";
+        }
+      });
+    } catch (error) {
+      awakeStatus.textContent = "The browser could not keep the screen awake.";
+    } finally { requestingScreenLock = false; }
+  }
+  for (const [control, key] of [[awakeBoard, "hyperTimer_awakeBoard"], [awakeFullscreen, "hyperTimer_awakeFullscreen"]]) {
+    control.disabled = !navigator.wakeLock;
+    control.addEventListener("change", () => {
+      localStorage.setItem(key, control.checked ? "on" : "off");
+      updateScreenAwake();
+    });
+  }
+  if (!navigator.wakeLock) awakeStatus.textContent = "Screen wake lock is unavailable in this browser.";
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden && !screenLock && !requestingScreenLock) requestedScreenAwake = false;
+    updateScreenAwake();
+  });
   registerServiceWorker();
   updateUIForLoginState();
   load();
