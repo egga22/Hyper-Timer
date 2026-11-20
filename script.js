@@ -4231,6 +4231,8 @@
       // as fallback fullscreen since we can't programmatically restore native.
     }
     
+    $("#pairOpen").hidden = !userCanUseProMode();
+    $("#pairOpen").disabled = timers.length < 2;
     grid.innerHTML = "";
     const visible = [...timers].sort((a,b) =>
       Number(b.pinned === true) - Number(a.pinned === true) || remainingMs(a) - remainingMs(b)
@@ -4248,6 +4250,8 @@
       return !card.dataset.proPart || card.dataset.proPart === '';
     }
     
+    if ($("#pairScreen").open) renderPair();
+
     // Restore fullscreen if there was one
     if (fullscreenTimerId) {
       // Safely find the card by iterating through cards instead of using template literals in selectors
@@ -4337,10 +4341,13 @@
   function ringRadius(cvs, px){ const dpr=window.devicePixelRatio||1; return (px||10)*dpr; }
   function drawRing(cvs,t){
     const ctx=cvs.getContext("2d"); const w=cvs.width,h=cvs.height; const dpr=window.devicePixelRatio||1; const size=Math.min(w,h);
-    const cx=w/2, cy=h/2; const lw=ringRadius(cvs, t.ring_thickness||10); const R=size/2-lw;
+    const cx=w/2, cy=h/2; const lw=ringRadius(cvs, t.ring_thickness||10);
+    const expanded = !!cvs.closest("#pairCards");
+    const rx = Math.max(1, (expanded ? w : size)/2-lw);
+    const ry = Math.max(1, (expanded ? h : size)/2-lw);
     const p=visualProgress(t); const start=-Math.PI/2;
-    ctx.lineWidth=lw; ctx.strokeStyle='rgba(255,255,255,.08)'; ctx.beginPath(); ctx.arc(cx,cy,R,0,Math.PI*2); ctx.stroke();
-    ctx.lineCap='round'; ctx.lineWidth=lw; ctx.strokeStyle=t.color; const end=start+p*Math.PI*2; ctx.beginPath(); ctx.arc(cx,cy,R,start,end); ctx.stroke();
+    ctx.lineWidth=lw; ctx.strokeStyle='rgba(255,255,255,.08)'; ctx.beginPath(); ctx.ellipse(cx,cy,rx,ry,0,0,Math.PI*2); ctx.stroke();
+    ctx.lineCap='round'; ctx.lineWidth=lw; ctx.strokeStyle=t.color; const end=start+p*Math.PI*2; ctx.beginPath(); ctx.ellipse(cx,cy,rx,ry,0,start,end); ctx.stroke();
   }
   
   function planLetters(totalMs, nOverride=null){
@@ -4439,8 +4446,23 @@
     const frameMs = plan.frameMs;
 
     const ctx = cvs.getContext('2d');
+    const paired = !!card?.closest("#pairCards");
+    if (paired && window.matchMedia("(max-width: 600px) and (orientation: portrait)").matches) {
+      const letters = Array.from(currentLetters(t).text);
+      const spacing = Math.min(cssH / Math.max(letters.length, 1), availW * .72);
+      const bw = Math.round(availW * dpr), bh = Math.round(cssH * dpr);
+      if (cvs.width !== bw || cvs.height !== bh) { cvs.width = bw; cvs.height = bh; }
+      ctx.clearRect(0, 0, bw, bh);
+      ctx.font = `bold ${spacing * .85 * dpr}px monospace`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillStyle = t.color || "#6c7bff";
+      letters.forEach((letter, index) => ctx.fillText(letter, bw / 2,
+        bh / 2 + (index - (letters.length - 1) / 2) * spacing * dpr));
+      return;
+    }
 
-    let fs = Math.floor(cssH * (isFS ? 1.25 : 0.36));
+    let fs = Math.floor(cssH * (paired ? .84 : isFS ? 1.25 : 0.36));
     const pad = Math.max(16, Math.floor(cssH * (isFS ? 0.02 : 0.12)));
 
     ctx.save();
@@ -4563,6 +4585,7 @@
 
   function tick(){
     const cardsById = groupTimerCards(grid);
+    const pair = typeof pairScreen !== "undefined" && pairScreen.open ? groupTimerCards(pairCards) : null;
     const fullscreenCard = activeNativeFullscreenElement() || fallbackFullscreenCard;
     timers.forEach(t=>{
       if (t.style === "pro") ensureProSplitState(t);
@@ -4572,9 +4595,9 @@
       const newTxt = fmt(remainingForDisplay(t), t.units, t.ms==="on", template, t.name, t);
       const progress = visualProgress(t);
 
-      cards.forEach(card => {
+      [...cards, ...(pair?.get(String(t.id)) || [])].forEach(card => {
         // Keep reminder/completion processing below active for every timer.
-        if (fullscreenCard && card !== fullscreenCard) return;
+        if (fullscreenCard && card !== fullscreenCard && !(pair && card.parentElement === pairCards)) return;
         const nodes = getCardUpdateNodes(card);
         const { txt } = nodes;
         if (txt?.dataset?.nextPercent !== undefined && txt.matches(":hover")) updatePercentHover(txt, t, true);
@@ -4592,6 +4615,9 @@
           const { fill } = nodes;
           const width = (progress*100).toFixed(2)+"%";
           if (fill && fill.style.width !== width) fill.style.width = width;
+          if (fill && pair && card.parentElement === pairCards && fill.style.getPropertyValue("--pair-progress") !== width) {
+            fill.style.setProperty("--pair-progress", width);
+          }
         } else if (["ring","pie","multibar","letters"].includes(displayStyle)){
           const { cvs } = nodes;
           if (cvs) drawVisual(cvs, timerForVisual);
@@ -5005,6 +5031,75 @@
     handle.addEventListener("pointerup", finish);
     handle.addEventListener("pointercancel", finish);
   }
+  document.querySelectorAll('[data-close-dialog="pairPicker"]').forEach(button => {
+    button.addEventListener("click", () => $("#pairPicker").close());
+  });
+  const pairScreen = $("#pairScreen");
+  const pairCards = $("#pairCards");
+  const pairStage = $("#pairStage");
+  let pairNative = false;
+  const pairFirst = $("#pairFirst");
+  const pairSecond = $("#pairSecond");
+  const pairStart = $("#pairStart");
+  let displayedPair = [];
+  $("#pairOpen").addEventListener("click", () => {
+    if (!userCanUseProMode()) return;
+    [pairFirst, pairSecond].forEach((select, index) => {
+      select.replaceChildren(...timers.map(timer => new Option(timer.name || "Untitled", timer.id)));
+      select.selectedIndex = index;
+    });
+    updatePairStart();
+    $("#pairPicker").showModal();
+  });
+  function updatePairStart() {
+    pairStart.disabled = !pairFirst.value || !pairSecond.value || pairFirst.value === pairSecond.value;
+  }
+  pairFirst.addEventListener("change", updatePairStart);
+  pairSecond.addEventListener("change", updatePairStart);
+  function renderPair() {
+    const cards = displayedPair.map(id => {
+      const timer = timers.find(item => String(item.id) === id);
+      if (timer) return buildTimerCards(timer)[0];
+      const empty = document.createElement("p");
+      empty.textContent = "This timer was removed.";
+      return empty;
+    });
+    const ringAndBar = cards.length === 2 && cards.some(card => card.dataset.displayStyle === "ring")
+      && cards.some(card => card.dataset.displayStyle === "bar");
+    pairCards.classList.toggle("pair-ring-and-bar", ringAndBar);
+    pairCards.replaceChildren(...cards);
+    cards.forEach(scheduleFullscreenRedraw);
+  }
+  pairStart.addEventListener("click", async () => {
+    displayedPair = [pairFirst.value, pairSecond.value];
+    $("#pairPicker").close();
+    renderPair();
+    pairScreen.showModal();
+    if (pairStage.requestFullscreen) {
+      try {
+        await pairStage.requestFullscreen();
+        pairNative = document.fullscreenElement === pairStage;
+      } catch (error) {
+        // The full-viewport dialog also works when native fullscreen is unavailable.
+      }
+    }
+    renderPair();
+  });
+  document.addEventListener("fullscreenchange", () => {
+    if (pairNative && document.fullscreenElement !== pairStage) {
+      pairNative = false;
+      if (pairScreen.open) pairScreen.close();
+    }
+  });
+  $("#pairExit").addEventListener("click", async () => {
+    if (document.fullscreenElement === pairStage) await exitNativeFullscreenIfActive();
+    if (pairScreen.open) pairScreen.close();
+  });
+  pairScreen.addEventListener("close", () => {
+    if (document.fullscreenElement === pairStage) exitNativeFullscreenIfActive();
+    pairCards.replaceChildren();
+    $("#pairOpen").focus();
+  });
   registerServiceWorker();
   updateUIForLoginState();
   load();
