@@ -46,7 +46,7 @@ test('hidden timer still fires reminders and completion while its visual work is
       triggers: [{ id: 'reminder', type: 'time', valueTime: 500 }] }
   ];
   let reminders = 0, completions = 0, saves = 0;
-  const context = vm.createContext({ timers, grid: {},
+  const context = vm.createContext({ timers, grid: {}, currentUser: null,
     groupTimerCards: () => new Map([['visible', [visible]], ['hidden', [hidden]]]),
     activeNativeFullscreenElement: () => visible, fallbackFullscreenCard: null,
     getCardUpdateNodes: card => {

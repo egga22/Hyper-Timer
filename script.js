@@ -27,63 +27,38 @@
     }
     return Math.abs(hash);
   }
-  function parseTimestamp(raw) {
-    if (raw == null) return 0;
-    if (typeof raw === "number") {
-      return Number.isFinite(raw) ? raw : 0;
-    }
-    if (typeof raw === "string") {
-      const numeric = Number(raw);
-      if (Number.isFinite(numeric)) return numeric;
-      const parsed = Date.parse(raw);
-      if (Number.isFinite(parsed)) return parsed;
-      try {
-        const maybeObject = JSON.parse(raw);
-        if (maybeObject && typeof maybeObject === "object") {
-          return parseTimestamp(maybeObject);
-        }
-      } catch (err) {
-        // Ignore JSON parse errors and continue with other strategies.
-      }
-      return 0;
-    }
-    if (Array.isArray(raw)) {
-      for (const entry of raw) {
-        const ts = parseTimestamp(entry);
-        if (ts) return ts;
-      }
-      return 0;
-    }
-    if (typeof raw === "object") {
-      if (Object.prototype.hasOwnProperty.call(raw, "$date")) {
-        return parseTimestamp(raw.$date);
-      }
-      if (Object.prototype.hasOwnProperty.call(raw, "$numberLong")) {
-        return parseTimestamp(raw.$numberLong);
-      }
-      if (typeof raw.valueOf === "function" && raw.valueOf !== Object.prototype.valueOf) {
-        const value = raw.valueOf();
-        if (value !== raw) {
-          const ts = parseTimestamp(value);
-          if (ts) return ts;
-        }
-      }
-    }
-    return 0;
-  }
-  function canonicalizeTimersForComparison(list) {
-    if (!Array.isArray(list)) return [];
-    return list
-      .map(item => {
-        if (!item || typeof item !== "object") return {};
-        const { _prevRem, _firedMap, _kMap, ...rest } = item;
-        return { ...rest };
-      })
-      .sort((a, b) => {
-        const idA = typeof a.id === "string" ? a.id : "";
-        const idB = typeof b.id === "string" ? b.id : "";
-        return idA.localeCompare(idB);
+  // Timer ordering and in-memory trigger bookkeeping are independent of user edits.
+  function timerSyncIndex(list) {
+    return new Map(list.map(timer => {
+      const { _prevRem, _firedMap, _kMap, ...data } = timer;
+      const signature = JSON.stringify(data, (_, value) => {
+        if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+        return Object.fromEntries(Object.keys(value).sort().map(key => [key, value[key]]));
       });
+      return [String(timer.id), signature];
+    }));
+  }
+
+  function mergeTimerChanges(baseline, local, remote) {
+    const draft = timerSyncIndex(local);
+    const cloud = timerSyncIndex(remote);
+    const result = new Map(remote.map(timer => [String(timer.id), timer]));
+    const localById = new Map(local.map(timer => [String(timer.id), timer]));
+    let conflict = false;
+    let changed = false;
+    for (const id of new Set([...baseline.keys(), ...draft.keys()])) {
+      const before = baseline.get(id);
+      const after = draft.get(id);
+      if (before === after || after === cloud.get(id)) continue;
+      if (before !== cloud.get(id)) {
+        conflict = true;
+        continue;
+      }
+      if (after === undefined) result.delete(id);
+      else result.set(id, localById.get(id));
+      changed = true;
+    }
+    return { timers: [...result.values()], changed, conflict };
   }
 
   function parseFlexibleTimestamp(raw) {
@@ -144,7 +119,33 @@
   const API_KEY = '68a65f75b349a309704b6cab'; // <-- IMPORTANT: SET THIS
   
   let currentUser = null;
-  let isSyncing = false;
+  let syncInFlight = null;
+  let queuedTimerSync = false;
+  let verifiedTimerBoard = false;
+  let displayedTimerBaseline = new Map();
+  let timerSyncEpoch = 0;
+  const syncStorageKey = (kind, account) => `hyperTimer_sync_${kind}_${account}`;
+
+  function activeSyncBaseline(account) {
+    const raw = localStorage.getItem(syncStorageKey("base", account));
+    return raw === null ? null : new Map(JSON.parse(raw));
+  }
+
+  function archiveSyncBoard(account, list) {
+    const key = syncStorageKey("recovery", account);
+    const history = JSON.parse(localStorage.getItem(key) || "[]");
+    if (JSON.stringify(history[0]?.timers) === JSON.stringify(list)) return;
+    history.unshift({ savedAt: Date.now(), timers: list });
+    localStorage.setItem(key, JSON.stringify(history.slice(0, 3)));
+  }
+
+  function renderSyncRecovery() {
+    const history = currentUser ? JSON.parse(localStorage.getItem(syncStorageKey("recovery", currentUser.id)) || "[]") : [];
+    $("#syncRecoveryOpen").hidden = history.length === 0;
+    $("#syncRecoveryVersion").replaceChildren(...history.map((item, index) => new Option(
+      `${new Date(item.savedAt).toLocaleString()} · ${item.timers.length} timers`, index
+    )));
+  }
   // --- END: Authentication and Sync Configuration ---
 
   const grid = $("#grid");
@@ -468,7 +469,6 @@
   let editId = null;
 
   const KEY_TIMERS = "hyperTimer_v6_timers";
-  const KEY_LAST_MODIFIED = "hyperTimer_v6_lastModified";
   const KEY_USER = "hyperTimer_v6_user";
   const TPL = "hyperTimer_templates_v1";
   const PRO_SPLIT_STYLES = ["multibar", "letters", "color"];
@@ -2157,20 +2157,31 @@
     enforceProModeEligibility(false);
   }
 
-  async function updateAndSaveTimers(newTimersArray = null) {
-    if (newTimersArray) {
-      timers = newTimersArray;
+  async function updateAndSaveTimers(newTimersArray = null, { automatic = false } = {}) {
+    if (automatic && currentUser && !verifiedTimerBoard) return;
+    const draft = newTimersArray || timers;
+    let next = draft;
+    if (currentUser) {
+      const stored = JSON.parse(localStorage.getItem(KEY_TIMERS) || "[]").map(migrateTimer);
+      const merge = mergeTimerChanges(displayedTimerBaseline, draft.map(migrateTimer), stored);
+      if (merge.conflict) archiveSyncBoard(currentUser.id, draft);
+      next = merge.timers;
+      if (!activeSyncBaseline(currentUser.id)) {
+        localStorage.setItem(syncStorageKey("base", currentUser.id), JSON.stringify([...timerSyncIndex(stored)]));
+      }
     }
-    const newTimestamp = Date.now();
-    localStorage.setItem(KEY_TIMERS, JSON.stringify(timers));
-    localStorage.setItem(KEY_LAST_MODIFIED, String(newTimestamp));
+    localStorage.setItem(KEY_TIMERS, JSON.stringify(next));
+    timers = next;
+    displayedTimerBaseline = timerSyncIndex(timers.map(migrateTimer));
     render();
 
     if (currentUser) {
-      await pushTimersToCloud(timers, newTimestamp);
+      renderSyncRecovery();
+      queuedTimerSync = true;
+      await syncTimers();
     }
   }
-  
+
   function load(){
     cloudAccountMissing = false;
     try {
@@ -2188,20 +2199,24 @@
           localStorage.setItem(KEY_USER, JSON.stringify(currentUser));
         }
       }
+      const owner = localStorage.getItem("hyperTimer_sync_boardAccount");
+      if (currentUser?.id && owner !== currentUser.id) {
+        localStorage.removeItem(syncStorageKey("base", currentUser.id));
+        localStorage.setItem("hyperTimer_sync_boardAccount", currentUser.id);
+      }
       const raw = localStorage.getItem(KEY_TIMERS);
       if (raw){ const data = JSON.parse(raw); if (Array.isArray(data)) timers = data.map(migrateTimer); }
       const rt = localStorage.getItem(TPL);
       if (rt){ const data = JSON.parse(rt); if (Array.isArray(data)) templates = data.map(migrateTemplate); }
     } catch(e){ console.warn("load failed", e); }
+    displayedTimerBaseline = timerSyncIndex(timers);
     applyPreferencesToState(loadPreferencesForCurrentUser(), { save: false });
     persistedPreferenceStatus = { message: "", tone: "neutral" };
     lastPreferenceStatus = { message: "", tone: "neutral" };
     renderPreferencesStatus();
     updateUIForLoginState();
-    if (currentUser) {
-        syncTimers();
-    }
-    refreshSmartTimers();
+    if (currentUser) syncTimers().then(() => refreshSmartTimers());
+    else refreshSmartTimers();
   }
 
   function saveTemplates(){ localStorage.setItem(TPL, JSON.stringify(templates)); }
@@ -2281,10 +2296,12 @@
   }
 
   async function refreshSmartTimers(){
+    if (currentUser && !verifiedTimerBoard) return;
     let changed = false;
     await Promise.all(timers.map(async t => {
       if (t.mode === "smart" && t.smartMethod === "manifold" && t.smartUrl) {
         const ts = await getExpectedDate(t.smartUrl);
+        if (!timers.includes(t)) return;
         if (ts && ts !== t.targetMs) {
           t.targetMs = ts;
           if (typeof t.startOverrideMs === "number") {
@@ -2302,7 +2319,7 @@
         }
       }
     }));
-    if (changed) await updateAndSaveTimers();
+    if (changed) await updateAndSaveTimers(null, { automatic: true });
   }
 
   function msOfDuration(d,h,m,s){ return ((+d||0)*86400 + (+h||0)*3600 + (+m||0)*60 + (+s||0)) * 1000; }
@@ -3372,7 +3389,11 @@
         return;
     }
 
+    verifiedTimerBoard = false;
+    timerSyncEpoch++;
     currentUser = { id: user._id, email: user.email, role: extractRoleFromRecord(user) };
+    localStorage.removeItem(syncStorageKey("base", currentUser.id));
+    localStorage.setItem("hyperTimer_sync_boardAccount", currentUser.id);
     cloudAccountMissing = false;
     localStorage.setItem(KEY_USER, JSON.stringify(currentUser));
     persistedPreferenceStatus = { message: "", tone: "neutral" };
@@ -3383,12 +3404,25 @@
     closeAuthDialog();
 
     await syncTimers();
+    refreshSmartTimers();
   }
 
   function handleLogout() {
     if (confirm("Are you sure you want to log out? Your timers will remain on this device but will no longer sync.")) {
       closeSettingsDialog();
+      if (currentUser?.id && localStorage.getItem(syncStorageKey("base", currentUser.id))) {
+        const base = activeSyncBaseline(currentUser.id);
+        const local = timerSyncIndex(timers);
+        if (base.size !== local.size || [...base].some(([id, value]) => local.get(id) !== value)) {
+          try { archiveSyncBoard(currentUser.id, timers); }
+          catch (error) { alert("Free up browser storage or export your timers before logging out."); return; }
+        }
+      }
       currentUser = null;
+      localStorage.removeItem("hyperTimer_sync_boardAccount");
+      verifiedTimerBoard = false;
+      queuedTimerSync = false;
+      timerSyncEpoch++;
       cloudAccountMissing = false;
       localStorage.removeItem(KEY_USER);
       persistedPreferenceStatus = { message: "", tone: "neutral" };
@@ -3400,203 +3434,119 @@
     }
   }
   
-  async function syncTimers() {
-      if (!currentUser || !currentUser.id || isSyncing) return;
-      isSyncing = true;
+  function showAccountSync(account, state, message, last = null) {
+    if (account !== currentUser?.id) return;
+    const lastKey = syncStorageKey("last", account);
+    if (last) localStorage.setItem(lastKey, String(last));
+    const stamp = Number(localStorage.getItem(lastKey));
+    $("#accountSyncStatus").dataset.state = state;
+    $("#accountSyncHeadline").textContent = message;
+    $("#accountSyncDetail").textContent = stamp ? `Last successful sync · ${new Date(stamp).toLocaleString()}`
+      : "This device has yet to finish a sync.";
+  }
+
+  async function syncTimers({ includePreferences = false } = {}) {
+    const account = currentUser?.id;
+    if (!account) return;
+    if (syncInFlight) return syncInFlight;
+    const epoch = timerSyncEpoch;
+    const stillSignedIn = () => account === currentUser?.id && epoch === timerSyncEpoch;
+    const fetchAccount = async () => {
+      const response = await fetch(`${RESTDB_URL}/${account}`, {
+        cache: "no-store",
+        headers: { "x-apikey": API_KEY }
+      });
+      if (response.status === 404 && stillSignedIn()) cloudAccountMissing = true;
+      if (!response.ok) throw new Error("Could not fetch remote data.");
+      return response.json();
+    };
+    async function reconcile() {
       cloudAccountMissing = false;
-      const localStoredPreferences = sanitizePreferences(loadPreferencesForCurrentUser());
-      let shouldRestorePreferences = false;
-      let preferencesPushedViaTimers = false;
-      if (settingsSyncBtn) {
-        settingsSyncBtn.textContent = "Syncing...";
-        settingsSyncBtn.disabled = true;
+      if (!stillSignedIn()) return;
+      const remote = await fetchAccount();
+      if (!stillSignedIn()) return;
+      if (!Array.isArray(remote.timers)) throw new Error("Invalid cloud timer list.");
+      const cloudTimers = remote.timers.map(migrateTimer);
+      const localTimers = JSON.parse(localStorage.getItem(KEY_TIMERS) || "[]").map(migrateTimer);
+      const baseline = activeSyncBaseline(account);
+      const merge = baseline
+        ? mergeTimerChanges(baseline, localTimers, cloudTimers)
+        : { timers: cloudTimers, changed: false, conflict: localTimers.length > 0
+          && JSON.stringify([...timerSyncIndex(localTimers)].sort()) !== JSON.stringify([...timerSyncIndex(cloudTimers)].sort()) };
+      if (merge.conflict) archiveSyncBoard(account, localTimers);
+      if (merge.changed) {
+        // Check again before a whole-record PATCH. The REST API has no documented atomic version check.
+        const latest = await fetchAccount();
+        if (!stillSignedIn()) return;
+        if (JSON.stringify(latest.timers) !== JSON.stringify(remote.timers)
+          || JSON.stringify(latest.last_modified) !== JSON.stringify(remote.last_modified)) {
+          throw new Error("Cloud timers changed during sync. Local changes are queued for retry.");
+        }
+        // Preserve the board just read from the cloud before submitting a replacement.
+        if (!merge.conflict) archiveSyncBoard(account, cloudTimers);
+        await patchAccount({ timers: merge.timers, last_modified: new Date().toISOString() });
+        if (!stillSignedIn()) return;
       }
 
-      try {
-        const response = await fetch(`${RESTDB_URL}/${currentUser.id}`, {
-            headers: { 'x-apikey': API_KEY }
-        });
-        if (response.status === 404) {
-          cloudAccountMissing = true;
-          applyPreferencesToState(localStoredPreferences, { save: false });
-          if (userCanAccessDefaultSettings()) {
-            setPreferencesStatus("Cloud account not found. Defaults will stay local.", "error", { persist: true });
-          }
-          alert('Cloud account not found. Your timers and defaults will stay local until it is restored.');
-          return;
-        }
-        if (!response.ok) throw new Error("Could not fetch remote data.");
-
-        const remoteUser = await response.json();
-        const remoteTimersRaw = Array.isArray(remoteUser.timers) ? remoteUser.timers : [];
-        const remoteTimers = remoteTimersRaw.map(migrateTimer);
-        const remoteRole = extractRoleFromRecord(remoteUser);
-        currentUser.role = remoteRole;
+      localStorage.setItem(syncStorageKey("base", account), JSON.stringify([...timerSyncIndex(merge.timers)]));
+      // A save may have landed while the PATCH was in flight. Carry its delta into the next pass.
+      const newestLocal = JSON.parse(localStorage.getItem(KEY_TIMERS) || "[]").map(migrateTimer);
+      const next = mergeTimerChanges(timerSyncIndex(localTimers), newestLocal, merge.timers);
+      if (next.conflict) archiveSyncBoard(account, newestLocal);
+      const before = JSON.stringify([...timerSyncIndex(timers)].sort());
+      localStorage.setItem(KEY_TIMERS, JSON.stringify(next.timers));
+      displayedTimerBaseline = timerSyncIndex(next.timers);
+      if (before !== JSON.stringify([...timerSyncIndex(next.timers)].sort())) {
+        timers = next.timers;
+        render();
+      }
+      const role = extractRoleFromRecord(remote);
+      if (currentUser.role !== role) {
+        currentUser.role = role;
         localStorage.setItem(KEY_USER, JSON.stringify(currentUser));
         updateUIForLoginState();
-
-        const remotePreferencesRaw = remoteUser && typeof remoteUser === "object"
-          ? (remoteUser.Settings ?? remoteUser.settings ?? remoteUser.preferences)
-          : null;
-        const sanitizedRemotePreferences = remotePreferencesRaw && typeof remotePreferencesRaw === "object"
-          ? sanitizePreferences(remotePreferencesRaw)
-          : null;
-
-        if (sanitizedRemotePreferences) {
-          applyPreferencesToState(sanitizedRemotePreferences, { save: true });
-          if (userCanAccessDefaultSettings()) {
-            setPreferencesStatus("Defaults synced from cloud.", "success", { persist: true });
-          } else {
-            persistedPreferenceStatus = { message: "", tone: "neutral" };
-            lastPreferenceStatus = { message: "", tone: "neutral" };
-            renderPreferencesStatus();
-          }
-        } else {
-          applyPreferencesToState(localStoredPreferences, { save: true });
-          shouldRestorePreferences = true;
-          if (userCanAccessDefaultSettings()) {
-            setPreferencesStatus("Cloud defaults missing — using local backup.", "warning", { persist: true });
-          }
-        }
-
-        const remoteTimestamp = parseTimestamp(remoteUser.last_modified);
-        let localTimestamp = parseTimestamp(localStorage.getItem(KEY_LAST_MODIFIED));
-
-        const localTimersExist = timers.length > 0;
-        const remoteTimersExist = remoteTimers.length > 0;
-        const remoteTimestampMissing = remoteTimestamp === 0;
-        let localTimestampMissing = localTimestamp === 0;
-
-        const canonicalLocal = canonicalizeTimersForComparison(timers);
-        const canonicalRemote = canonicalizeTimersForComparison(remoteTimers);
-        const timersDiffer = JSON.stringify(canonicalLocal) !== JSON.stringify(canonicalRemote);
-
-        let shouldPushLocal = false;
-        let shouldPullRemote = false;
-        let pushTimestamp = null;
-        let pullTimestamp = null;
-
-        if (localTimersExist && !remoteTimersExist) {
-            console.log("Sync: Local timers exist and remote is empty. Pushing local state.");
-            shouldPushLocal = true;
-            if (!localTimestamp) {
-              localTimestamp = Date.now();
-              localTimestampMissing = false;
-              localStorage.setItem(KEY_LAST_MODIFIED, String(localTimestamp));
-            }
-            pushTimestamp = localTimestamp;
-        } else if (!localTimersExist && remoteTimersExist) {
-            console.log("Sync: Local is empty and remote has timers. Pulling remote state.");
-            shouldPullRemote = true;
-            pullTimestamp = remoteTimestamp || Date.now();
-            if (remoteTimestampMissing) {
-              shouldPushLocal = true;
-              pushTimestamp = pullTimestamp;
-            }
-        } else if (remoteTimestamp > localTimestamp) {
-            console.log("Sync: Remote is newer. Pulling remote state.");
-            shouldPullRemote = true;
-            pullTimestamp = remoteTimestamp;
-        } else if (localTimestamp > remoteTimestamp) {
-            console.log("Sync: Local is newer. Pushing local state.");
-            shouldPushLocal = true;
-            pushTimestamp = localTimestamp;
-        } else if (remoteTimestampMissing || localTimestampMissing) {
-            if (!timersDiffer) {
-              console.log("Sync: Timers match but timestamps are missing. Refreshing timestamp.");
-              shouldPushLocal = true;
-              pushTimestamp = Date.now();
-              localTimestamp = pushTimestamp;
-              localTimestampMissing = false;
-              localStorage.setItem(KEY_LAST_MODIFIED, String(localTimestamp));
-            } else if (!remoteTimersExist) {
-              console.log("Sync: Remote appears empty after comparison. Pushing local state.");
-              shouldPushLocal = true;
-              pushTimestamp = Date.now();
-              localTimestamp = pushTimestamp;
-              localTimestampMissing = false;
-              localStorage.setItem(KEY_LAST_MODIFIED, String(localTimestamp));
-            } else if (!localTimersExist) {
-              console.log("Sync: Local appears empty after comparison. Pulling remote state.");
-              shouldPullRemote = true;
-              pullTimestamp = Date.now();
-              shouldPushLocal = true;
-              pushTimestamp = pullTimestamp;
-            } else if (canonicalLocal.length >= canonicalRemote.length) {
-              console.log("Sync: Missing timestamps; preferring local timers.");
-              shouldPushLocal = true;
-              pushTimestamp = Date.now();
-              localTimestamp = pushTimestamp;
-              localTimestampMissing = false;
-              localStorage.setItem(KEY_LAST_MODIFIED, String(localTimestamp));
-            } else {
-              console.log("Sync: Missing timestamps; preferring remote timers.");
-              shouldPullRemote = true;
-              pullTimestamp = Date.now();
-              shouldPushLocal = true;
-              pushTimestamp = pullTimestamp;
-            }
-        } else {
-            console.log("Sync: Local and remote are up to date.");
-        }
-
-        if (shouldPullRemote) {
-            timers = remoteTimers;
-            const timestampToStore = pullTimestamp || remoteTimestamp || Date.now();
-            localStorage.setItem(KEY_TIMERS, JSON.stringify(timers));
-            localStorage.setItem(KEY_LAST_MODIFIED, String(timestampToStore));
-            localTimestamp = timestampToStore;
-            localTimestampMissing = false;
-            render();
-        }
-
-        if (shouldPushLocal) {
-            const timestampToPush = pushTimestamp || localTimestamp || Date.now();
-            localStorage.setItem(KEY_LAST_MODIFIED, String(timestampToPush));
-            localTimestamp = timestampToPush;
-            localTimestampMissing = false;
-            const pushSucceeded = await pushTimersToCloud(timers, timestampToPush);
-            if (pushSucceeded) {
-              preferencesPushedViaTimers = true;
-            }
-        }
-        await refreshSmartTimers();
-
-        if (shouldRestorePreferences) {
-          if (!preferencesPushedViaTimers) {
-            try {
-              const pushed = await pushPreferencesToCloud();
-              if (pushed && userCanAccessDefaultSettings()) {
-                setPreferencesStatus("Cloud defaults restored from local backup.", "success", { persist: true });
-              }
-            } catch (prefError) {
-              if (prefError.message === "account-not-found") {
-                if (userCanAccessDefaultSettings()) {
-                  setPreferencesStatus("Cloud account missing. Defaults saved locally only.", "error", { persist: true });
-                }
-              } else {
-                console.error("Failed to sync preferences to the cloud:", prefError);
-                if (userCanAccessDefaultSettings()) {
-                  setPreferencesStatus("Defaults saved locally. Cloud sync failed.", "error");
-                }
-              }
-            }
-          } else if (userCanAccessDefaultSettings()) {
-            setPreferencesStatus("Cloud defaults restored from local backup.", "success", { persist: true });
-          }
-        }
-
-        alert('Sync complete!');
-      } catch (error) {
-          console.error("Sync failed:", error);
-          alert("Sync failed. Please check your connection and try again.");
-      } finally {
-          isSyncing = false;
-          if (settingsSyncBtn) {
-            settingsSyncBtn.textContent = "Sync Now";
-            settingsSyncBtn.disabled = false;
-          }
+        render();
       }
+      if (!verifiedTimerBoard || includePreferences) {
+        const prefs = remote.Settings ?? remote.settings ?? remote.preferences;
+        if (prefs && typeof prefs === "object") {
+          applyPreferencesToState(prefs, { save: true });
+        } else if (includePreferences) {
+          await pushPreferencesToCloud();
+        }
+      }
+      verifiedTimerBoard = true;
+      showAccountSync(account, merge.conflict || next.conflict ? "pending" : "complete",
+        merge.conflict || next.conflict ? "Cloud kept · Local copy available" : "Timers are up to date", Date.now());
+      renderSyncRecovery();
+    }
+
+    showAccountSync(account, "checking", "Checking for changes…");
+    settingsSyncBtn.disabled = true;
+    settingsSyncBtn.textContent = "Syncing…";
+    const task = async () => {
+      do {
+        queuedTimerSync = false;
+        if (navigator.locks) await navigator.locks.request(`hyperTimer-sync-${account}`, reconcile);
+        else await reconcile();
+      } while (queuedTimerSync && stillSignedIn());
+    };
+    syncInFlight = task().catch(error => {
+      console.error("Sync failed:", error);
+      const base = activeSyncBaseline(account);
+      const local = timerSyncIndex(timers.map(migrateTimer));
+      const pending = base && (base.size !== local.size || [...base].some(([id, value]) => local.get(id) !== value));
+      const headline = pending ? "Changes waiting to sync" : navigator.onLine ? "Sync unavailable" : "Offline";
+      showAccountSync(account, "pending", headline);
+      settingsSyncBtn.textContent = "Retry Sync";
+      renderSyncRecovery();
+    }).finally(() => {
+      syncInFlight = null;
+      settingsSyncBtn.disabled = false;
+      if (settingsSyncBtn.textContent === "Syncing…") settingsSyncBtn.textContent = "Sync Now";
+      if (!stillSignedIn() && currentUser) syncTimers();
+    });
+    return syncInFlight;
   }
 
   async function patchAccount(partialPayload) {
@@ -3619,53 +3569,6 @@
       throw new Error(`Server responded with ${response.status}`);
     }
     return response;
-  }
-
-  async function pushTimersToCloud(timersArray, timestampNumber) {
-    if (!currentUser || !currentUser.id) {
-      console.warn("Skipping cloud push because the current user record is missing an id.");
-      return;
-    }
-
-    const timestampValue = Number(timestampNumber);
-    let safeTimestamp = Number.isFinite(timestampValue) ? timestampValue : null;
-    if (safeTimestamp === null && timestampNumber) {
-      const parsedTimestamp = Date.parse(timestampNumber);
-      if (Number.isFinite(parsedTimestamp)) {
-        safeTimestamp = parsedTimestamp;
-      }
-    }
-    if (safeTimestamp === null) {
-      safeTimestamp = Date.now();
-    }
-
-    const sanitizedPrefs = sanitizePreferences(userPreferences);
-    const payload = {
-      timers: timersArray,
-      last_modified: new Date(safeTimestamp).toISOString(),
-      Settings: sanitizedPrefs,
-      preferences: sanitizedPrefs
-    };
-
-    try {
-      await patchAccount(payload);
-      console.log("Successfully pushed changes to the cloud.");
-      return true;
-    } catch (error) {
-      if (error.message === "no-current-user") {
-        console.warn("Skipping cloud push because no authenticated user is available.");
-        return false;
-      }
-      if (error.message === "account-not-found") {
-        console.warn("Skipping cloud push because the remote account record is missing.");
-        if (userCanAccessDefaultSettings()) {
-          setPreferencesStatus("Cloud account missing. Defaults saved locally only.", "error", { persist: true });
-        }
-        return false;
-      }
-      console.error("Failed to push changes to the cloud:", error);
-    }
-    return false;
   }
 
   async function pushPreferencesToCloud() {
@@ -4119,7 +4022,7 @@
         t.paused = !t.paused;
         if (t.paused){ t.pausedAt = Date.now(); t.leftWhenPaused = remNow; }
         else { const delta = Date.now() - (t.pausedAt||Date.now()); if (t.mode==="duration"){ t.start += delta; } else { t.targetMs += delta; } delete t.pausedAt; }
-        render();
+        await updateAndSaveTimers();
       } else if (act==="duplicate"){
         // Copy progress, pause state and fired reminders, but never share nested state.
         const copy = JSON.parse(JSON.stringify(t));
@@ -4602,14 +4505,14 @@
         else if (tr.type==="interval"){ const intMs=(tr.intervalSec*1000)||1000; const kPrev=Math.floor(ePrev/intMs), kNow=Math.floor(eNow/intMs); const last=t._kMap[tr.id]??0; if (kNow>last){ const quantRem = total - kNow*intMs; fireAction(t,tr,Math.max(0,quantRem),total); t._kMap[tr.id]=kNow; } }
       });
 
-      if (rem <= 0 && !t.completed){
+      if (rem <= 0 && !t.completed && (!currentUser || verifiedTimerBoard)){
         t.completed = true;
         if (t.doneSoundDataUrl) playDataUrl(t.doneSoundDataUrl); else tone(990,.25);
         if (t.doneTts) speak(fillTokens(t.doneTts, 0, total, t));
         if (timerLoopsEnabled(t)) {
           handleLoopRestart(t, total);
         }
-        updateAndSaveTimers();
+        updateAndSaveTimers(null, { automatic: true });
       }
       t._prevRem = timerLoopsEnabled(t) ? remainingMs(t) : rem;
     });
@@ -4640,8 +4543,10 @@
     button.addEventListener("click", () => document.getElementById(button.dataset.closeFullscreen).close());
   });
 
-  $("#settingsFullscreenControls").addEventListener("change", () => {
+  $("#settingsFullscreenControls").addEventListener("change", async () => {
     applyPreferencesToState({ ...userPreferences, fullscreenControls: readFullscreenControls($("#settingsFullscreenControls")) });
+    try { await pushPreferencesToCloud(); }
+    catch (error) { console.warn("Full-screen preferences are saved on this device.", error); }
   });
   $("#timerFullscreenControls").addEventListener("change", () => {
     hasTimerFullscreenOverride = true;
@@ -4706,7 +4611,22 @@
     openAuthDialog(true);
   });
   if (settingsLogoutBtn) settingsLogoutBtn.addEventListener('click', handleLogout);
-  if (settingsSyncBtn) settingsSyncBtn.addEventListener('click', syncTimers);
+  settingsSyncBtn.addEventListener("click", () => syncTimers({ includePreferences: true }));
+  $("#syncRecoveryBtn").addEventListener("click", () => {
+    if (!currentUser) return;
+    const history = JSON.parse(localStorage.getItem(syncStorageKey("recovery", currentUser.id)) || "[]");
+    const key = event => new Date(event.savedAt).toISOString().replace(/[:.]/g, "-");
+    const item = history[Number($("#syncRecoveryVersion").value)];
+    if (!item) return;
+    const url = URL.createObjectURL(new Blob([JSON.stringify(item.timers, null, 2)], { type: "application/json" }));
+    const link = Object.assign(document.createElement("a"), { href: url, download: `hyper-timers-recovery-${key(item)}.json` });
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  });
+  window.addEventListener("online", () => syncTimers().then(() => refreshSmartTimers()));
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden && currentUser) syncTimers().then(() => refreshSmartTimers());
+  });
   if (settingsDialog) settingsDialog.addEventListener('close', () => {
     if (settingsBtn) settingsBtn.setAttribute('aria-expanded', 'false');
   });
@@ -4720,6 +4640,10 @@
   $("#authSubmitBtn").addEventListener('click', handleAuthSubmit);
   if (authDialog) authDialog.addEventListener('close', resetAuthDialogState);
 
+  document.querySelectorAll('[data-close-dialog="syncRecoveryDialog"]').forEach(button => {
+    button.addEventListener("click", () => $("#syncRecoveryDialog").close());
+  });
+  $("#syncRecoveryOpen").addEventListener("click", () => $("#syncRecoveryDialog").showModal());
   registerServiceWorker();
   updateUIForLoginState();
   load();
