@@ -5133,7 +5133,7 @@
         // The full-viewport dialog also works when native fullscreen is unavailable.
       }
     }
-    renderPair();
+    [...pairCards.children].forEach(scheduleFullscreenRedraw);
   });
   document.addEventListener("fullscreenchange", () => {
     if (pairNative && document.fullscreenElement !== pairStage) {
