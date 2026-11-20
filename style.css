@@ -217,3 +217,8 @@ button.pill{background:transparent; cursor:pointer}
  .settings-footer:has(button[hidden]){display:none}
 .settings-text-action{border:0;background:none;padding:4px 0;color:var(--muted);font:inherit;font-size:.8rem;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
 .settings-text-action:hover{color:var(--text)}
+[data-act="pin"]{color:var(--text)}
+.timer-pin{pointer-events:none;display:block;width:16px;height:16px;background:currentColor;clip-path:polygon(25% 5%,75% 5%,75% 20%,66% 20%,66% 43%,85% 63%,85% 71%,55% 71%,50% 100%,45% 71%,15% 71%,15% 63%,34% 43%,34% 20%,25% 20%);transform:rotate(35deg)}
+[data-act="pin"][aria-pressed="true"] .timer-pin{transform:none}
+
+@media(max-width:380px){.grid{grid-template-columns:minmax(0,1fr)}.card .actions{gap:4px}.card .action-btn{width:30px;height:32px}}

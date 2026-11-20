@@ -468,6 +468,7 @@
   let templates = [];
   let editId = null;
 
+
   const KEY_TIMERS = "hyperTimer_v6_timers";
   const KEY_USER = "hyperTimer_v6_user";
   const TPL = "hyperTimer_templates_v1";
@@ -3909,7 +3910,7 @@
     actions.className = "actions";
     const pauseBtn = (t.mode==="datetime" || t.mode==="smart") ? "" : `<button class="action-btn" data-act="pause" title="${t.paused?'Resume':'Pause'}">⏯︎</button>`;
     const fullscreenBtn = `<button class="action-btn" data-act="fullscreen" title="Fullscreen">⛶</button>`;
-    actions.innerHTML = `${pauseBtn}${fullscreenBtn}<button class="action-btn" data-act="duplicate" title="Duplicate timer" aria-label="Duplicate timer">⧉</button><button class="action-btn" data-act="prestige" title="Prestige">★</button><button class="action-btn" data-act="tplsave" title="Save template">⇪</button><button class="action-btn" data-act="edit" title="Edit">✎</button><button class="action-btn" data-act="delete" title="Delete">🗑</button>`;
+    actions.innerHTML = `${pauseBtn}${fullscreenBtn}<button class="action-btn" data-act="pin" title="${t.pinned ? "Unpin timer" : "Pin timer"}" aria-label="Pin timer" aria-pressed="${t.pinned === true}"><span class="timer-pin" aria-hidden="true"></span></button><button class="action-btn" data-act="duplicate" title="Duplicate timer" aria-label="Duplicate timer">⧉</button><button class="action-btn" data-act="prestige" title="Prestige">★</button><button class="action-btn" data-act="tplsave" title="Save template">⇪</button><button class="action-btn" data-act="edit" title="Edit">✎</button><button class="action-btn" data-act="delete" title="Delete">🗑</button>`;
     const fullscreenControls = effectiveFullscreenControls(t);
     actions.querySelectorAll("[data-act]").forEach(button => {
       if (!button.hasAttribute("aria-label")) button.setAttribute("aria-label", button.title);
@@ -4020,7 +4021,10 @@
     actions.addEventListener("click", async ev=>{
       const act = ev.target?.dataset?.act;
       if (!act) return;
-      if (act==="pause"){
+      if (act==="pin"){
+        t.pinned = t.pinned !== true;
+        await updateAndSaveTimers();
+      } else if (act==="pause"){
         const remNow = remainingMs(t);
         t.paused = !t.paused;
         if (t.paused){ t.pausedAt = Date.now(); t.leftWhenPaused = remNow; }
@@ -4129,9 +4133,10 @@
     }
     
     grid.innerHTML = "";
-    timers.sort((a,b)=> remainingMs(a) - remainingMs(b));
-
-    timers.forEach(t => {
+    const visible = [...timers].sort((a,b) =>
+      Number(b.pinned === true) - Number(a.pinned === true) || remainingMs(a) - remainingMs(b)
+    );
+    visible.forEach(t => {
       const cards = buildTimerCards(t);
       cards.forEach(card => grid.appendChild(card));
     });
