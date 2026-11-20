@@ -308,3 +308,4 @@ button.pill{background:transparent; cursor:pointer}
 .template-apply-fields input{accent-color:var(--accent)}#templateTargets{max-height:30dvh;overflow:auto}
 
 #timerApplyOpen[hidden]{display:none}#timerTemplateStaged{color:#c9d0ff}
+#smartDeadlineTools{padding:11px 13px;background:#181b2a;border:1px solid #32364c;border-radius:12px;gap:7px}
