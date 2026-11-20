@@ -302,3 +302,4 @@ button.pill{background:transparent; cursor:pointer}
   #pairCards .big{font-size:clamp(14px,17cqw,38px)}
   #pairCards.pair-ring-and-bar .card[data-display-style="bar"]{width:66%}
 }
+.big .flip{font-variant-numeric:tabular-nums;min-inline-size:min(100%,9ch);overflow-wrap:anywhere}
