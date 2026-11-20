@@ -1308,6 +1308,10 @@
     updateDefaultSettingsSection();
     updateLoopFeatureToggle();
     updatePercentHoverToggle();
+    grid.querySelectorAll(".percent-countdown").forEach(span => {
+      const timer = timers.find(item => String(item.id) === span.closest(".card")?.dataset.id);
+      if (timer) updatePercentHover(span, timer, userPreferences.percentHoverEnabled);
+    });
     refreshFullscreenControls();
     updateLoopingSectionVisibility();
   }
@@ -4256,39 +4260,43 @@
     const template = t.units==="custom" ? resolveCustomFormatValue(t.format) : null;
     span.textContent = fmt(remainingForDisplay(t), t.units, t.ms==="on", template, t.name, t);
     
-    // Add hover functionality for autopct format
-    if (t.units === "autopct" && userPreferences.percentHoverEnabled) {
-      span.style.cursor = "help";
-      span.title = calculateTimeToNextPercent(t);
+    if (t.units === "autopct") {
+      span.classList.add("percent-countdown");
+      updatePercentHover(span, t, userPreferences.percentHoverEnabled);
+      span.addEventListener("pointerenter", () => updatePercentHover(span, t, userPreferences.percentHoverEnabled));
     }
     
     big.appendChild(span); return big;
   }
   
+  function updatePercentHover(span, timer, enabled) {
+    if (!enabled) {
+      delete span.dataset.nextPercent;
+      return;
+    }
+    const value = calculateTimeToNextPercent(timer);
+    if (span.dataset.nextPercent !== value) span.dataset.nextPercent = value;
+  }
+
   function calculateTimeToNextPercent(t) {
     const total = t.total0 || baseTotal(t);
-    if (total <= 0) return "N/A";
-    
-    const rem = Math.max(0, remainingMs(t));
-    const elapsed = Math.max(0, total - rem);
-    const progress = total ? elapsed / total : 1;
-    const currentPercent = Math.round(progress * 100);
-    
-    // Calculate next whole percentage point
-    const nextPercent = currentPercent + 1;
-    if (nextPercent > 100) return "Timer complete";
-    
-    // Calculate time needed to reach next percent
-    const nextPercentProgress = nextPercent / 100;
-    const nextPercentElapsed = total * nextPercentProgress;
-    const timeToNext = Math.max(0, nextPercentElapsed - elapsed);
-    
-    // Format the time
-    const S = splitTime(timeToNext);
-    if (S.d > 0) return `${S.d}d ${S.h}h ${S.m}m to ${nextPercent}%`;
-    if (S.h > 0) return `${S.h}h ${S.m}m ${S.s}s to ${nextPercent}%`;
-    if (S.m > 0) return `${S.m}m ${S.s}s to ${nextPercent}%`;
-    return `${S.s}s to ${nextPercent}%`;
+    const remaining = remainingMs(t);
+    if (!Number.isFinite(total) || !Number.isFinite(remaining)) return "Next percentage unavailable";
+    if (total <= 0 || remaining <= 0) return "Timer complete";
+
+    const displayed = Math.round(Math.max(0, (total - remaining) / total) * 100);
+    const next = displayed + 1;
+    // The displayed percentage rounds up at the half-point.
+    const threshold = displayed === 100 ? total : total * ((next - 0.5) / 100);
+    const wait = Math.max(0, remaining - total + threshold);
+    const time = splitTime(Math.ceil(wait / 1000) * 1000);
+    const parts = [];
+    if (time.d) parts.push(`${time.d}d`);
+    if (time.h) parts.push(`${time.h}h`);
+    if (time.m) parts.push(`${time.m}m`);
+    if (time.s || !parts.length) parts.push(`${time.s}s`);
+    const destination = displayed === 100 ? "until complete" : `to ${next}%`;
+    return `${t.paused ? "Paused · " : ""}${parts.join(" ")} ${destination}`;
   }
 
   function drawVisual(cvs,t){
@@ -4550,6 +4558,7 @@
         if (fullscreenCard && card !== fullscreenCard) return;
         const nodes = getCardUpdateNodes(card);
         const { txt } = nodes;
+        if (txt?.dataset?.nextPercent !== undefined && txt.matches(":hover")) updatePercentHover(txt, t, true);
         if (txt && txt.textContent !== newTxt){
           txt.textContent = newTxt;
           txt.style.transform = "perspective(400px) rotateX(16deg)";
