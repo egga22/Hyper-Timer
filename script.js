@@ -185,6 +185,7 @@
     scheduleFullscreenRedraw(previousNativeFullscreenCard);
     scheduleFullscreenRedraw(active);
     previousNativeFullscreenCard = active;
+    if (!active) requestAnimationFrame(returnToBoard);
   }
   document.addEventListener('fullscreenchange', handleNativeFullscreenChange);
   document.addEventListener('webkitfullscreenchange', handleNativeFullscreenChange);
@@ -250,6 +251,26 @@
     }
   }
 
+  let boardReturn = null;
+  function captureBoardPosition(card, control) {
+    if (!card) return;
+    boardReturn = { id: card.dataset.id, part: card.dataset.proPart, control,
+      offset: card.getBoundingClientRect().top, scroll: window.scrollY };
+  }
+  function returnToBoard() {
+    if (!boardReturn || editor.open || activeNativeFullscreenElement() || fallbackFullscreenCard) return;
+    const position = boardReturn;
+    boardReturn = null;
+    requestAnimationFrame(() => {
+      if (editor.open || activeNativeFullscreenElement() || fallbackFullscreenCard) return;
+      const card = [...grid.querySelectorAll(".card")].find(item => item.dataset.id === position.id
+        && item.dataset.proPart === position.part);
+      const y = card ? window.scrollY + card.getBoundingClientRect().top - position.offset : position.scroll;
+      window.scrollTo({ top: y, behavior: "instant" });
+      card?.querySelector(`[data-act="${position.control}"]`)?.focus({ preventScroll: true });
+    });
+  }
+
   function activateFallbackFullscreen(card){
     if (!card) return;
     if (fallbackFullscreenCard && fallbackFullscreenCard !== card){
@@ -263,7 +284,10 @@
   }
 
   function handleEscapeForFallback(ev){
-    if (ev.key === "Escape") deactivateFallbackFullscreen();
+    if (ev.key === "Escape" && fallbackFullscreenCard) {
+      deactivateFallbackFullscreen();
+      returnToBoard();
+    }
   }
 
   document.addEventListener("keydown", handleEscapeForFallback);
@@ -4045,12 +4069,14 @@
           );
         }
       } else if (act==="fullscreen"){
+        if (!activeNativeFullscreenElement() && !fallbackFullscreenCard) captureBoardPosition(card, "fullscreen");
         ev.preventDefault();
         const activeNative = activeNativeFullscreenElement();
         
         // If this card is in fallback fullscreen, exit it
         if (card.classList.contains("fullscreen-fallback")){
           deactivateFallbackFullscreen(card);
+          returnToBoard();
           return;
         }
         
@@ -4073,6 +4099,7 @@
           activateFallbackFullscreen(card);
         }
       } else if (act==="edit"){
+        captureBoardPosition(card, "edit");
         openEditor(t.id);
       } else if (act==="delete"){
         if (confirm("Delete timer?")){
@@ -4773,6 +4800,7 @@
     showDeletedTimers();
     $("#deletedDialog").showModal();
   });
+  editor.addEventListener("close", returnToBoard);
   registerServiceWorker();
   updateUIForLoginState();
   load();
