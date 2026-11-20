@@ -313,10 +313,9 @@ button.pill{background:transparent; cursor:pointer}
 #buttonOrderList .dragging{opacity:.6}
 #buttonOrderList .drop-target{outline:2px solid var(--accent)}
 .button-order-handle{touch-action:none;cursor:grab;color:#cbd0ff;font-size:1.05rem;padding:.14rem .55rem;min-height:28px}
-.button-order-meta{display:flex;justify-content:space-between;align-items:center;gap:8px}
 #timerButtonOrderContent .dialog-body{padding:4px 0 0;max-width:480px}
 
 .button-order-visibility{display:flex;align-items:center;gap:7px;font-size:.8rem;cursor:pointer}
 .button-order-visibility input{accent-color:var(--accent);margin:0}
-.button-order-resets{display:flex;justify-content:flex-end;gap:6px;flex-wrap:wrap}
 .action-btn.normal-hidden{display:none}
+#buttonOrderReset{justify-self:end}

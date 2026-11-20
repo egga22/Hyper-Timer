@@ -5280,7 +5280,6 @@
   });
   const orderDialog = $("#buttonOrderDialog");
   const orderList = $("#buttonOrderList");
-  const orderStatus = $("#buttonOrderStatus");
   const orderModeButtons = $$("[data-order-mode]", orderDialog);
   let orderView = "normal";
   let orderForTimer = false;
@@ -5332,14 +5331,14 @@
     updateButtonOrderFooter();
   }
 
+  function builtInButtonVisibility() {
+    return orderView === "normal" ? sanitizeNormalControls() : sanitizeFullscreenControls(DEFAULT_PREFERENCES.fullscreenControls);
+  }
+
   function updateButtonOrderFooter() {
-    const hasCustomOrder = Boolean(orderDraft[orderView]);
-    const hasCustomVisibility = orderForTimer && orderVisibilityDraft[orderView] !== null;
-    orderStatus.textContent = orderForTimer
-      ? hasCustomOrder || hasCustomVisibility ? "Custom settings for this view" : "Using account defaults"
-      : hasCustomOrder ? "Custom order for this view" : "Using the built-in order";
-    $("#buttonVisibilityReset").hidden = !hasCustomVisibility;
-    $("#buttonOrderReset").hidden = !hasCustomOrder;
+    const visibility = orderVisibilityDraft[orderView];
+    const customVisibility = orderForTimer ? visibility !== null : visibility.join() !== builtInButtonVisibility().join();
+    $("#buttonOrderReset").hidden = !orderDraft[orderView] && !customVisibility;
   }
 
   function moveButtonOrder(keys, from, to) {
@@ -5373,18 +5372,15 @@
   });
   function setButtonVisibility(visibility) {
     orderVisibilityDraft[orderView] = visibility;
-    if (!orderForTimer) return;
-    if (orderView === "fullscreen") draftTimerFullscreenControls = visibility;
-    else draftTimerNormalControls = visibility;
+    if (orderForTimer) {
+      if (orderView === "fullscreen") draftTimerFullscreenControls = visibility;
+      else draftTimerNormalControls = visibility;
+    }
     updateButtonOrderFooter();
   }
   orderList.addEventListener("change", () => {
     const checked = $$("input:checked", orderList).map(input => input.value);
     setButtonVisibility(orderView === "fullscreen" ? sanitizeFullscreenControls(checked) : sanitizeNormalControls(checked));
-  });
-  $("#buttonVisibilityReset").addEventListener("click", () => {
-    setButtonVisibility(null);
-    showButtonOrder();
   });
   orderModeButtons.forEach(button => button.addEventListener("click", () => {
     orderView = button.dataset.orderMode;
@@ -5393,7 +5389,9 @@
   $("#buttonOrderReset").addEventListener("click", () => {
     delete orderDraft[orderView];
     if (orderForTimer) draftTimerButtonOrder = orderDraft;
+    setButtonVisibility(orderForTimer ? null : builtInButtonVisibility());
     showButtonOrder();
+    orderModeButtons.find(button => button.dataset.orderMode === orderView)?.focus();
   });
   $("#buttonOrderSave").addEventListener("click", async () => {
     applyPreferencesToState({ ...userPreferences, buttonOrder: orderDraft,

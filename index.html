@@ -594,20 +594,14 @@
 <dialog class="fullscreen-controls-dialog button-order-dialog" id="buttonOrderDialog" aria-labelledby="buttonOrderDialogHeading">
   <div class="dialog-header"><h2 id="buttonOrderDialogHeading">Timer button order</h2><button class="btn" type="button" data-close-dialog="buttonOrderDialog" aria-label="Close">✕</button></div>
   <div id="accountButtonOrderContent">
-  <div class="dialog-body" id="buttonOrderContent">
-    <div class="button-order-modes" role="group" aria-label="Timer view">
-      <button type="button" class="btn" data-order-mode="normal">Normal</button>
-      <button type="button" class="btn" data-order-mode="fullscreen">Full screen</button>
-    </div>
-    <p class="note button-order-note" id="buttonOrderHelp">Drag handles or use arrow keys to reorder left to right. Check Show to display a button.</p>
-    <ol id="buttonOrderList" aria-describedby="buttonOrderHelp"></ol>
-    <div class="button-order-meta">
-      <div class="note" id="buttonOrderStatus" role="status"></div>
-      <div class="button-order-resets">
-        <button type="button" class="btn" id="buttonVisibilityReset" hidden>Reset visibility</button>
-        <button type="button" class="btn" id="buttonOrderReset" hidden>Reset order</button>
+    <div class="dialog-body" id="buttonOrderContent">
+      <div class="button-order-modes" role="group" aria-label="Timer view">
+        <button type="button" class="btn" data-order-mode="normal">Normal</button>
+        <button type="button" class="btn" data-order-mode="fullscreen">Full screen</button>
       </div>
-    </div>
+      <p class="note button-order-note" id="buttonOrderHelp">Drag handles or use arrow keys to reorder left to right. Check Show to display a button.</p>
+      <ol id="buttonOrderList" aria-describedby="buttonOrderHelp"></ol>
+      <button type="button" class="btn" id="buttonOrderReset" hidden>Reset</button>
     </div>
   </div>
   <div class="fullscreen-popup-footer"><button class="btn primary" type="button" id="buttonOrderSave">Save changes</button></div>

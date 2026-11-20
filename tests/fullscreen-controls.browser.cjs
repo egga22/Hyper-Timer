@@ -116,8 +116,11 @@ const expose = `window.fullscreenTest = {
     await page.locator('[data-act="fullscreen"]').click();
     await page.locator('.fullscreen-fallback').waitFor({ state: 'hidden' });
     await editFullscreen();
-    await page.locator('#buttonVisibilityReset').click();
+    await page.locator('#buttonOrderList [data-order-key="edit"] button').press('ArrowUp');
+    await page.locator('#buttonOrderReset').click();
     assert.ok(await page.locator('#buttonOrderList [value="pause"]').isChecked());
+    assert.equal(await page.locator('#buttonOrderList li').first().getAttribute('data-order-key'), 'duplicate');
+    assert.equal(await page.locator('#buttonOrderReset').isVisible(), false);
     await saveTimer();
     assert.equal(await page.evaluate(() => fullscreenTest.read()[0].fullscreenControls), null);
     assert.deepEqual(errors, []);
