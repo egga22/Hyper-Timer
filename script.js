@@ -2923,7 +2923,7 @@
     templateMenu.appendChild(add);
     templates.forEach(tpl=>{
       const row=document.createElement("div"); row.className="template-item";
-      const meta=`<div class='note'>${tpl.style} • ${tpl.units} • ${(tpl.triggers?.length||0)} trig</div>`;
+      const meta=`<div class='note'>${escapeHtml(tpl.style)} • ${escapeHtml(tpl.units)} • ${(tpl.triggers?.length||0)} trig</div>`;
       row.innerHTML=`<div style='display:flex;justify-content:space-between;gap:8px;align-items:center'><div>${escapeHtml(tpl.name)}</div><div><button class='btn' data-act='use'>Use</button> <button class='btn' data-act='rename'>Rename</button> <button class='btn' data-act='edit'>Edit</button> <button class='btn' data-act='del'>Delete</button></div></div>${meta}`;
       row.querySelector("[data-act='use']").addEventListener("click", (e)=>{ e.stopPropagation(); templateMenu.classList.remove("open"); if (tplBtn) tplBtn.setAttribute("aria-expanded", "false"); openEditor(null, tpl); });
       row.querySelector("[data-act='edit']").addEventListener("click", (e)=>{ e.stopPropagation(); templateMenu.classList.remove("open"); if (tplBtn) tplBtn.setAttribute("aria-expanded", "false"); openEditor(null, tpl); $("#dialogTitle").textContent = "Edit Template"; });
@@ -3805,21 +3805,6 @@
     }
   });
 
-  exportBtn.addEventListener("click", ()=>{
-    const blob=new Blob([JSON.stringify(timers,null,2)], {type:"application/json"});
-    const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="hyper-timers.json"; a.click();
-    setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
-  });
-  importInput.addEventListener("change", async (ev)=>{
-    const file=ev.target.files?.[0]; if(!file) return; const text=await file.text();
-    try{ 
-      const data=JSON.parse(text); if(!Array.isArray(data)) throw new Error("Invalid file"); 
-      await updateAndSaveTimers(data.map(migrateTimer));
-      alert("Imported "+data.length+" timer(s)."); 
-    }
-    catch(e){ alert("Failed to import: "+e.message); } finally { importInput.value=""; }
-  });
-
   addBtn.addEventListener("click", ()=>openEditor(null,null));
   fab.addEventListener("click", ()=>openEditor(null,null));
 
@@ -4644,6 +4629,61 @@
     button.addEventListener("click", () => $("#syncRecoveryDialog").close());
   });
   $("#syncRecoveryOpen").addEventListener("click", () => $("#syncRecoveryDialog").showModal());
+  const importButton = $("#importBtn");
+  importButton.addEventListener("click", () => importInput.click());
+  exportBtn.addEventListener("click", () => {
+    const snapshot = { format: "hypertimer-backup", version: 1, savedAt: new Date().toISOString(),
+      timers, templates, preferences: sanitizePreferences(userPreferences) };
+    const url = URL.createObjectURL(new Blob([JSON.stringify(snapshot, null, 2)], { type: "application/json" }));
+    Object.assign(document.createElement("a"), { href: url, download: `hypertimer-backup-${snapshot.savedAt.slice(0, 10)}.json` }).click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  });
+  importInput.addEventListener("change", async () => {
+    const file = importInput.files[0];
+    if (!file) return;
+    importButton.disabled = true;
+    const owner = currentUser?.id;
+    let previous;
+    try {
+      const data = JSON.parse(await file.text());
+      if (currentUser?.id !== owner) throw new Error("Account changed during import");
+      const validList = list => Array.isArray(list) && list.every(item => item && typeof item.id === "string")
+        && new Set(list.map(item => item.id)).size === list.length;
+      const legacy = validList(data);
+      if (!legacy && (data?.format !== "hypertimer-backup" || data.version !== 1
+        || !validList(data.timers) || !validList(data.templates)
+        || !data.preferences || typeof data.preferences !== "object" || Array.isArray(data.preferences))) {
+        throw new Error("Choose a valid HyperTimer backup or timer export.");
+      }
+      const next = (legacy ? data : data.timers).map(migrateTimer);
+      previous = { templates, preferences: userPreferences, timers };
+      if (!legacy) {
+        templates = data.templates.map(migrateTemplate);
+        saveTemplates();
+        applyPreferencesToState(sanitizePreferences(data.preferences), { save: true });
+      }
+      await updateAndSaveTimers(next);
+      if (!legacy && currentUser?.id === owner && currentUser) {
+        try { await pushPreferencesToCloud(); }
+        catch (error) { console.warn("Imported preferences were saved on this device.", error); }
+      }
+      alert(legacy ? `Imported ${next.length} timer(s)` : `Imported ${next.length} timer(s), ${templates.length} template(s), and settings`);
+    } catch (error) {
+      if (previous && currentUser?.id === owner) {
+        timers = previous.timers;
+        templates = previous.templates;
+        try {
+          saveTemplates();
+          applyPreferencesToState(previous.preferences, { save: true });
+        } catch (restoreError) { console.warn("Could not rewrite previous settings.", restoreError); }
+        render();
+      }
+      alert(`Failed to import: ${error.message}`);
+    } finally {
+      importInput.value = "";
+      importButton.disabled = false;
+    }
+  });
   registerServiceWorker();
   updateUIForLoginState();
   load();
