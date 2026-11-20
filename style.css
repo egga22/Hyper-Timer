@@ -210,3 +210,5 @@ a:focus-visible{outline:2px solid var(--accent); outline-offset:3px;}
 .sync-status-panel{padding:13px 15px; border:1px solid rgba(108,123,255,.36); border-radius:12px; background:rgba(108,123,255,.1); display:grid; gap:4px;}
 .sync-status-panel[data-state="pending"]{border-color:#a97539; background:#292116;}
 .sync-status-panel[data-state="complete"]{border-color:#386857; background:#132420;}
+:where(button, input, select, textarea, summary, [tabindex]):focus-visible{outline:3px solid #a7afff; outline-offset:3px;}
+button.pill{background:transparent; cursor:pointer}

@@ -2919,6 +2919,14 @@
   function openTemplateMenu(){
     templateMenu.innerHTML="";
     const add=document.createElement("div"); add.className="template-item"; add.innerHTML="<strong>＋ New Template</strong>";
+    add.tabIndex = 0;
+    add.setAttribute("role", "button");
+    add.addEventListener("keydown", event => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        add.click();
+      }
+    });
     add.addEventListener("click", ()=>{ templateMenu.classList.remove("open"); if (tplBtn) tplBtn.setAttribute("aria-expanded", "false"); openEditor(null, {style:'bar', color:'#6c7bff', color2:'#6c7bff', units:'auto'}); });
     templateMenu.appendChild(add);
     templates.forEach(tpl=>{
@@ -2979,6 +2987,14 @@
         <div class="field"><input class="tr-sound invisible" type="file" accept="audio/*"></div>
         <div class="field"><button type="button" class="btn tr-remove">Delete</button></div>
       </div>`;
+    for (const suffix of ["type", "value", "action", "tts", "sound"]) {
+      const control = row.querySelector(`.tr-${suffix}`);
+      if (!control) continue;
+      control.id = `${uid("trigger_")}_${suffix}`;
+      const label = control.closest(".field")?.querySelector("label");
+      if (label && !label.htmlFor) label.htmlFor = control.id;
+      else if (suffix === "sound" || suffix === "tts") control.setAttribute("aria-label", suffix === "sound" ? "Trigger sound" : "Text to speak");
+    }
     const selType=row.querySelector(".tr-type"); const inputVal=row.querySelector(".tr-value"); const selAction=row.querySelector(".tr-action");
     const inputTts=row.querySelector(".tr-tts"); const inputSound=row.querySelector(".tr-sound");
     selType.value = entry.type||"percent"; selAction.value = entry.action||"tts";
@@ -3896,6 +3912,8 @@
     actions.innerHTML = `${pauseBtn}${fullscreenBtn}<button class="action-btn" data-act="duplicate" title="Duplicate timer" aria-label="Duplicate timer">⧉</button><button class="action-btn" data-act="prestige" title="Prestige">★</button><button class="action-btn" data-act="tplsave" title="Save template">⇪</button><button class="action-btn" data-act="edit" title="Edit">✎</button><button class="action-btn" data-act="delete" title="Delete">🗑</button>`;
     const fullscreenControls = effectiveFullscreenControls(t);
     actions.querySelectorAll("[data-act]").forEach(button => {
+      if (!button.hasAttribute("aria-label")) button.setAttribute("aria-label", button.title);
+
       button.classList.toggle("fullscreen-visible", fullscreenControls.includes(button.dataset.act));
     });
     card.appendChild(actions);
@@ -3978,7 +3996,7 @@
 
     const foot = document.createElement("div");
     foot.className="footer-row";
-    const pill = document.createElement("span"); pill.className="pill"; pill.dataset.role="accent-pill";
+    const pill = document.createElement("button"); pill.type = "button"; pill.className="pill"; pill.dataset.role="accent-pill";
     pill.textContent="Copy remaining"; pill.addEventListener("click", ()=>{ const template = t.units==='custom'?resolveCustomFormatValue(t.format):null; navigator.clipboard?.writeText(fmt(remainingMs(t), t.units, t.ms==='on', template, t.name, t)); pill.textContent="Copied ✓"; setTimeout(()=>pill.textContent="Copy remaining", 900);});
     foot.appendChild(pill);
 

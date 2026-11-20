@@ -30,7 +30,7 @@
 
 <main class="grid" id="grid"></main>
 <button class="fab" id="fab" aria-label="Add timer">＋</button>
-<div class="template-menu" id="templateMenu" role="menu" aria-label="Timer templates"></div>
+<div class="template-menu" id="templateMenu" role="region" aria-label="Timer templates"></div>
 
 <dialog id="editor" aria-labelledby="dialogTitle">
   <form method="dialog" novalidate>
@@ -71,44 +71,44 @@
         </div>
       </div>
       <div id="durationFields" class="field-row">
-        <div class="field"><label>Days</label><input id="f_days" type="number" min="0" value="0"></div>
-        <div class="field"><label>Hours</label><input id="f_hours" type="number" min="0" max="23" value="0"></div>
-        <div class="field"><label>Minutes</label><input id="f_minutes" type="number" min="0" max="59" value="1"></div>
-        <div class="field"><label>Seconds</label><input id="f_seconds" type="number" min="0" max="59" value="0"></div>
+        <div class="field"><label for="f_days">Days</label><input id="f_days" type="number" min="0" value="0"></div>
+        <div class="field"><label for="f_hours">Hours</label><input id="f_hours" type="number" min="0" max="23" value="0"></div>
+        <div class="field"><label for="f_minutes">Minutes</label><input id="f_minutes" type="number" min="0" max="59" value="1"></div>
+        <div class="field"><label for="f_seconds">Seconds</label><input id="f_seconds" type="number" min="0" max="59" value="0"></div>
       </div>
       <div id="datetimeFields" class="field">
-        <label>End date & time</label>
+        <label for="f_when">End date & time</label>
         <input id="f_when" type="datetime-local">
       </div>
       <div id="smartFields" class="field-row invisible">
         <div class="field">
-          <label>Method</label>
+          <label for="f_smartMethod">Method</label>
           <select id="f_smartMethod">
             <option value="manifold">Manifold</option>
           </select>
         </div>
         <div class="field">
-          <label>Market URL</label>
+          <label for="f_smartUrl">Market URL</label>
           <input id="f_smartUrl" type="url" placeholder="https://api.manifold.markets/...">
         </div>
       </div>
       <div id="startOverrideRow" class="field invisible">
-        <label>Start date & time (optional)</label>
+        <label for="f_startWhen">Start date & time (optional)</label>
         <input id="f_startWhen" type="datetime-local">
         <div class="note">For 'End date & time' or 'Smart time' modes. Controls where the animation starts.</div>
       </div>
       <div id="startPctRow" class="field invisible">
-        <label>Or starting percentage (0–100)</label>
+        <label for="f_startPct">Or starting percentage (0–100)</label>
         <input id="f_startPct" type="number" min="0" max="100" step="0.1" placeholder="e.g., 35">
         <div class="note">If set (and no start date), we back-compute a virtual start so progress equals this % right now.</div>
       </div>
       <div class="field-row">
         <div class="field">
-          <label>Primary color</label>
+          <label for="f_color">Primary color</label>
           <input id="f_color" type="color" value="#6c7bff">
         </div>
         <div class="field">
-          <label>Units display</label>
+          <label for="f_units">Units display</label>
           <select id="f_units">
             <option value="auto">Auto</option>
             <option value="autopct">Auto with percentage</option>
@@ -122,12 +122,12 @@
         </div>
       </div>
       <div id="color2Field" class="field invisible">
-        <label>Secondary color</label>
+        <label for="f_color2">Secondary color</label>
         <input id="f_color2" type="color" value="#ff6c7b">
         <div class="note">Used for the Color animation style.</div>
       </div>
       <div id="customFormatRow" class="field invisible">
-        <label>Custom time format</label>
+        <label for="f_format">Custom time format</label>
         <input id="f_format" type="text" placeholder="{HH}:{mm}:{ss}">
         <div class="note">Tokens: {DD},{HH},{mm},{ss},{ms3},{totalD},{totalH},{totalm},{totals},{name},{percent}</div>
       </div>
@@ -135,35 +135,35 @@
         <summary>Advanced visuals</summary>
         <div class="field-row">
           <div class="field">
-            <label>Multi‑bar: Bars count (2–5)</label>
+            <label for="f_mb_bars">Multi‑bar: Bars count (2–5)</label>
             <input id="f_mb_bars" type="number" min="2" max="5" placeholder="auto">
           </div>
           <div class="field">
-            <label>Multi‑bar: Target ticks per bar (8–40)</label>
+            <label for="f_mb_ticks">Multi‑bar: Target ticks per bar (8–40)</label>
             <input id="f_mb_ticks" type="number" min="8" max="40" placeholder="~20">
           </div>
         </div>
         <div class="field-row">
           <div class="field">
-            <label>Ring thickness (px)</label>
+            <label for="f_ring_thickness">Ring thickness (px)</label>
             <input id="f_ring_thickness" type="number" min="4" max="40" value="10">
           </div>
           <div class="field">
-            <label>Progress easing</label>
+            <label for="f_ease">Progress easing</label>
             <select id="f_ease"><option>linear</option><option>easeOut</option><option>easeInOut</option></select>
           </div>
         </div>
         <div class="field">
-          <label>Tick rate (ms)</label>
+          <label for="f_tick">Tick rate (ms)</label>
           <input id="f_tick" type="number" min="16" value="100">
         </div>
         <div class="field invisible" id="lettersSettings">
-          <label>Letters (count)</label>
+          <label for="f_letters_n">Letters (count)</label>
           <input id="f_letters_n" type="number" min="1" max="7" placeholder="Auto (leave blank)">
           <div class="note" id="lettersPreview">Frames: — • Frame length: —</div>
         </div>
         <div class="field">
-          <label>Show milliseconds</label>
+          <label for="f_ms">Show milliseconds</label>
           <select id="f_ms"><option value="off">Off</option><option value="on">On</option></select>
         </div>
       </details>
@@ -181,11 +181,11 @@
         <summary>Completion</summary>
         <div class="field-row">
           <div class="field">
-            <label>Completion sound (upload)</label>
+            <label for="f_doneSound">Completion sound (upload)</label>
             <input id="f_doneSound" type="file" accept="audio/*">
           </div>
           <div class="field">
-            <label>Completion TTS (optional)</label>
+            <label for="f_doneTts">Completion TTS (optional)</label>
             <input id="f_doneTts" type="text" placeholder="e.g., Time's up for {name}">
           </div>
         </div>
@@ -365,7 +365,7 @@
   <form method="dialog" novalidate>
     <div class="dialog-header">
       <div class="title">Settings</div>
-      <button class="btn" value="cancel" style="line-height:1;">✕</button>
+      <button class="btn" value="cancel" aria-label="Close dialog">✕</button>
     </div>
     <div class="dialog-body settings-body">
       <button type="button" class="fullscreen-settings-launch" id="settingsFullscreenOpen" aria-haspopup="dialog" aria-controls="fullscreenSettingsDialog">
@@ -461,7 +461,7 @@
   <form method="dialog" novalidate>
     <div class="dialog-header">
       <div class="title" id="authTitle">Log In</div>
-      <button class="btn" value="cancel" style="line-height:1;">✕</button>
+      <button class="btn" value="cancel" aria-label="Close dialog">✕</button>
     </div>
     <div class="dialog-body">
       <div class="field">
