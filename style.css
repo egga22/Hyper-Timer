@@ -237,8 +237,9 @@ button.pill{background:transparent; cursor:pointer}
 :is(.card:fullscreen,.card.fullscreen-fallback):is([data-placement="above"],[data-placement="below"]):is([data-display-style="ring"],[data-display-style="pie"]) .canvaswrap{width:min(90vw,calc(100dvh - 210px))!important}
 @media(max-height:420px){:is(.card:fullscreen,.card.fullscreen-fallback):is([data-placement="above"],[data-placement="below"]) :is(.canvaswrap,.progressbar,.split-color-preview){max-height:42dvh}}
 
+:is(.card:fullscreen,.card.fullscreen-fallback):is([data-placement="above"],[data-placement="below"])[data-display-style="letters"] .canvaswrap{flex:1 1 0;max-height:none}
 :is(.card:fullscreen,.card.fullscreen-fallback)[data-placement="above"] .big{order:-1}
-:is(.card:fullscreen,.card.fullscreen-fallback)[data-placement="overlay"]:not([data-display-style="none"]) .big{bottom:50%;transform:translateY(50%)}
+:is(.card:fullscreen,.card.fullscreen-fallback)[data-placement="overlay"]:not([data-display-style="none"]) .big{position:absolute;bottom:50%;transform:translateY(50%)}
 
 .fullscreen-category-section{display:grid;gap:10px;border-top:1px solid #343547;padding-top:14px}.fullscreen-category-section h3{margin:0}.fullscreen-category-section .layout-preview{min-height:84px}
 .editing-template :is(.template-schedule-field,#durationFields,#datetimeFields,#smartFields,#startOverrideRow,#startPctRow,#loopingSection){display:none!important}

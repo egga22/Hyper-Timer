@@ -4988,6 +4988,12 @@
   let requestedScreenAwake = false;
   function wantsScreenAwake() {
     if (document.hidden) return false;
+    if (pairScreen.open) {
+      return displayedPair.some(id => {
+        const timer = timers.find(item => String(item.id) === id);
+        return timer?.awakeFullscreen ? timer.awakeFullscreen === "on" : awakeFullscreen.checked;
+      });
+    }
     const card = activeNativeFullscreenElement() || fallbackFullscreenCard;
     if (card) {
       const timer = timers.find(item => String(item.id) === card.dataset.id);
