@@ -5329,12 +5329,17 @@
       }
       return row;
     }));
+    updateButtonOrderFooter();
+  }
+
+  function updateButtonOrderFooter() {
+    const hasCustomOrder = Boolean(orderDraft[orderView]);
+    const hasCustomVisibility = orderForTimer && orderVisibilityDraft[orderView] !== null;
     orderStatus.textContent = orderForTimer
-      ? orderDraft[orderView] ? "Custom order for this timer" : "Using account order"
-      : orderDraft[orderView] ? "Custom default for this view" : "Using the built-in order";
-    $("#buttonVisibilityReset").hidden = !orderForTimer || orderVisibilityDraft[orderView] === null;
-    $("#buttonOrderReset").disabled = !orderDraft[orderView];
-    $("#buttonOrderReset").textContent = orderForTimer ? "Use account order" : "Reset order";
+      ? hasCustomOrder || hasCustomVisibility ? "Custom settings for this view" : "Using account defaults"
+      : hasCustomOrder ? "Custom order for this view" : "Using the built-in order";
+    $("#buttonVisibilityReset").hidden = !hasCustomVisibility;
+    $("#buttonOrderReset").hidden = !hasCustomOrder;
   }
 
   function moveButtonOrder(keys, from, to) {
@@ -5371,7 +5376,7 @@
     if (!orderForTimer) return;
     if (orderView === "fullscreen") draftTimerFullscreenControls = visibility;
     else draftTimerNormalControls = visibility;
-    $("#buttonVisibilityReset").hidden = visibility === null;
+    updateButtonOrderFooter();
   }
   orderList.addEventListener("change", () => {
     const checked = $$("input:checked", orderList).map(input => input.value);
